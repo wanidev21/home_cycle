@@ -9,245 +9,379 @@
 <title>PedalQuest</title>
 {% raw %}
 <style>
+/* =====================================================================
+   디자인 토큰 — 스포츠 앱 스타일 (어두운 유리 패널 + 주황 포인트 하나)
+   ===================================================================== */
 :root {
-  --bg: #0e1116;
-  --panel: rgba(14, 17, 22, 0.82);
-  --panel-solid: #161b22;
-  --line: rgba(255, 255, 255, 0.12);
-  --text: #f2f4f7;
-  --muted: #9aa4b2;
-  --accent: #ff6b35;
-  --accent2: #2ec4b6;
+  --bg: #0a0d12;
+  --glass: rgba(13, 17, 24, 0.7);
+  --glass-strong: rgba(13, 17, 24, 0.86);
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --text: #f3f5f8;
+  --muted: #8d97a5;
+  --dim: #5d6673;
+  --accent: #ff6a2b;
+  --accent-soft: rgba(255, 106, 43, 0.16);
   --gold: #ffc53d;
+  --good: #3ddc84;
   --danger: #ff4d4f;
+  --z1: #5ab0ff; --z2: #3ddc84; --z3: #ffc53d; --z4: #ff5a5f;   /* RPM 구간 */
+  --r-lg: 22px; --r-md: 16px; --r-sm: 12px;
+  --blur: blur(18px) saturate(120%);
+  --num: "Bahnschrift", "DIN Alternate", "Roboto Condensed", "SamsungOne", system-ui, sans-serif;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body {
   margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
-  font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-family: "Pretendard", "SamsungOneKorean", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  -webkit-font-smoothing: antialiased;
 }
 canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .hidden { display: none !important; }
+.num { font-family: var(--num); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.ico { width: 1em; height: 1em; display: inline-block; vertical-align: -0.14em; flex: none; }
+.glass { background: var(--glass); border: 1px solid var(--line); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
 
-/* ---------- 화면(메뉴 등) ---------- */
+/* ---------- 메뉴 화면 ---------- */
 .screen {
   position: fixed; inset: 0; display: none; overflow-y: auto;
-  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 24px max(20px, env(safe-area-inset-left));
-  background: linear-gradient(180deg, rgba(8,10,14,0.55), rgba(8,10,14,0.88));
+  padding: max(28px, env(safe-area-inset-top)) max(32px, env(safe-area-inset-right)) 32px max(32px, env(safe-area-inset-left));
+  background: radial-gradient(120% 90% at 30% 10%, rgba(10,13,18,0.35), rgba(10,13,18,0.82) 75%);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
-.screen.active { display: block; }
-.wrap { max-width: 980px; margin: 0 auto; }
-h1 { font-size: 44px; margin: 8px 0 2px; letter-spacing: -1px; }
-h1 span { color: var(--accent); }
-h2 { font-size: 28px; margin: 4px 0 16px; }
-.sub { color: var(--muted); margin: 0 0 18px; }
-.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-.between { justify-content: space-between; }
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0; }
-.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
-.stat b { display: block; font-size: 28px; font-variant-numeric: tabular-nums; }
-.stat small { color: var(--muted); }
-.big-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 10px 0 18px; }
-button {
-  font: inherit; color: var(--text); background: var(--panel-solid); border: 1px solid var(--line);
-  border-radius: 16px; padding: 14px 20px; font-size: 20px; cursor: pointer; min-height: 56px;
+.screen.active { display: block; animation: fadein 0.25s ease-out; }
+#v-menu.active { display: flex; align-items: center; }
+#v-menu .wrap { width: 100%; }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+.wrap { max-width: 1080px; margin: 0 auto; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand .mark { width: 40px; height: 40px; border-radius: 12px; background: var(--accent); display: grid; place-items: center; color: #fff; }
+.brand .mark svg { width: 24px; height: 24px; }
+.brand b { font-size: 22px; font-weight: 800; letter-spacing: 0.02em; }
+.brand b span { color: var(--accent); }
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--line); font-size: 15px; color: var(--text); white-space: nowrap;
 }
-button:active { transform: scale(0.98); }
-button.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 700; }
-button.teal { background: var(--accent2); border-color: transparent; color: #04211e; font-weight: 700; }
-button.huge { font-size: 28px; padding: 26px 20px; border-radius: 22px; }
-button.huge small { display: block; font-size: 15px; font-weight: 400; opacity: 0.85; margin-top: 4px; }
-button:disabled { opacity: 0.35; }
-.tip { color: var(--muted); font-size: 15px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
-.sensor { font-size: 16px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none; }
+.dot.on { background: var(--good); box-shadow: 0 0 0 4px rgba(61,220,132,0.18); }
+.dot.off { background: var(--danger); box-shadow: 0 0 0 4px rgba(255,77,79,0.18); animation: blink 1.2s infinite; }
+.dot.mock { background: var(--gold); }
+@keyframes blink { 50% { opacity: 0.35; } }
 
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; }
-.card h3 { margin: 0 0 6px; font-size: 22px; }
-.card .meta { color: var(--muted); font-size: 15px; margin-bottom: 10px; }
-.card .stars { color: var(--gold); font-size: 22px; letter-spacing: 2px; }
-.card .btns { display: flex; gap: 8px; margin-top: 12px; }
-.card .btns button { flex: 1; font-size: 17px; padding: 10px; }
-.profile { height: 36px; width: 100%; display: block; margin: 6px 0; }
+.hello { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px; line-height: 1.15; }
+.hello-sub { color: var(--muted); font-size: 17px; margin: 0 0 24px; }
+.strip { display: grid; grid-template-columns: repeat(4, 1fr); border-radius: var(--r-lg); margin-bottom: 20px; overflow: hidden; }
+.strip > div { padding: 18px 22px; border-left: 1px solid var(--line); }
+.strip > div:first-child { border-left: 0; }
+.strip small { display: block; color: var(--muted); font-size: 13px; letter-spacing: 0.04em; margin-bottom: 6px; }
+.strip b { font-size: 34px; font-weight: 700; line-height: 1; }
+.strip i { font-style: normal; color: var(--muted); font-size: 15px; margin-left: 4px; }
 
-table { width: 100%; border-collapse: collapse; font-size: 16px; font-variant-numeric: tabular-nums; }
-th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
-th { color: var(--muted); font-weight: 500; }
+.modes { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 16px; }
+button { font: inherit; color: var(--text); cursor: pointer; border: 0; background: none; padding: 0; }
+button:disabled { opacity: 0.35; cursor: default; }
+.mode {
+  position: relative; text-align: left; border-radius: var(--r-lg); padding: 22px; min-height: 200px;
+  display: flex; flex-direction: column; background: var(--glass); border: 1px solid var(--line);
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  transition: transform 0.15s, border-color 0.15s;
+}
+.mode:active { transform: scale(0.98); }
+.mode .icon { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: rgba(255,255,255,0.07); margin-bottom: auto; }
+.mode .icon svg { width: 28px; height: 28px; }
+.mode .t { display: block; margin: 18px 0 4px; font-size: 26px; font-weight: 800; letter-spacing: -0.01em; }
+.mode .d { display: block; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.4; }
+.mode .go { position: absolute; top: 22px; right: 22px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,0.08); }
+.mode .go svg { width: 18px; height: 18px; }
+.mode.primary { background: linear-gradient(145deg, #ff7a3d, #e8521a); border-color: transparent; box-shadow: 0 14px 40px rgba(255,106,43,0.28); }
+.mode.primary .icon, .mode.primary .go { background: rgba(255,255,255,0.2); }
+.mode.primary .d { color: rgba(255,255,255,0.85); }
 
-.ach { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
-.ach .card.locked { opacity: 0.4; filter: grayscale(1); }
+.subnav { display: flex; gap: 12px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 0 22px;
+  border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--line); font-size: 17px; font-weight: 600;
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+}
+.btn:active { transform: scale(0.98); }
+.btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
+.btn.small { min-height: 40px; padding: 0 16px; font-size: 15px; border-radius: 999px; }
+.btn .ico { font-size: 20px; }
+.tip { color: var(--muted); font-size: 14px; margin-left: auto; line-height: 1.5; text-align: right; }
+.tip b { color: var(--text); font-weight: 600; }
 
-/* ---------- HUD ---------- */
+.pagehead { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
+.pagehead h2 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; }
+.back { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--glass); border: 1px solid var(--line); }
+.back svg { width: 22px; height: 22px; }
+.note { color: var(--muted); font-size: 15px; line-height: 1.7; border-radius: var(--r-md); padding: 14px 18px; margin-bottom: 18px; }
+.note b { color: var(--text); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.card { border-radius: var(--r-lg); padding: 20px; background: var(--glass); border: 1px solid var(--line); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.card .head { display: flex; align-items: baseline; gap: 10px; }
+.card .no { font-family: var(--num); color: var(--dim); font-size: 20px; font-weight: 700; }
+.card h3 { margin: 0; font-size: 22px; font-weight: 800; }
+.card .meta { color: var(--muted); font-size: 14px; margin-top: 4px; }
+.card .stars { color: var(--gold); font-size: 20px; letter-spacing: 3px; }
+.card .stars .off { color: rgba(255,255,255,0.14); }
+.card .row2 { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.card .best { font-size: 15px; color: var(--muted); }
+.card .best b { color: var(--text); font-size: 18px; }
+.card .btns { display: flex; gap: 10px; margin-top: 14px; }
+.card .btns .btn { flex: 1; min-height: 50px; }
+.profile { height: 56px; width: 100%; display: block; margin: 14px 0 4px; }
+
+.table { border-radius: var(--r-lg); overflow: hidden; }
+table { width: 100%; border-collapse: collapse; font-size: 16px; }
+th, td { text-align: left; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+td { font-family: var(--num); font-variant-numeric: tabular-nums; }
+td:nth-child(2) { font-family: inherit; }
+th { color: var(--muted); font-weight: 500; font-size: 13px; letter-spacing: 0.04em; }
+tr:last-child td { border-bottom: 0; }
+
+.ach { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.ach .card { display: flex; gap: 14px; align-items: flex-start; padding: 18px; }
+.ach .emo { font-size: 30px; width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: var(--accent-soft); flex: none; }
+.ach h3 { font-size: 18px; }
+.ach .card.locked .emo { filter: grayscale(1); opacity: 0.35; background: rgba(255,255,255,0.05); }
+.ach .card.locked h3 { color: var(--muted); }
+
+/* ---------- 플레이 HUD ---------- */
 #hud { position: fixed; inset: 0; pointer-events: none; }
-#hud .top { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 14px; display: flex; gap: 8px; }
-.pill {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px;
-  font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums;
-}
-.pill small { color: var(--muted); font-size: 14px; font-weight: 400; margin-left: 3px; }
-#sensorDot { position: absolute; top: max(14px, env(safe-area-inset-top)); right: 14px; font-size: 15px; }
+.panel { border-radius: var(--r-lg); background: var(--glass); border: 1px solid var(--line); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+#hud .top { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 16px; display: flex; }
+.metrics { display: flex; padding: 10px 6px; }
+.metrics > div { padding: 0 16px; border-left: 1px solid var(--line); }
+.metrics > div:first-child { border-left: 0; }
+.metrics small { display: block; font-size: 11px; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 2px; }
+.metrics b { font-size: 26px; font-weight: 700; line-height: 1.05; }
+.metrics i { font-style: normal; font-size: 13px; color: var(--muted); margin-left: 3px; }
+#sensorDot { position: absolute; top: max(16px, env(safe-area-inset-top)); right: 16px; }
+
 #stagebar {
-  position: absolute; top: max(66px, calc(env(safe-area-inset-top) + 54px)); left: 50%; transform: translateX(-50%);
-  width: min(560px, 60vw); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px;
+  position: absolute; top: max(16px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  width: min(460px, 38vw); padding: 10px 14px 8px;
 }
-#minimap { width: 100%; height: 42px; display: block; }
-#stageinfo { display: flex; justify-content: space-between; font-size: 16px; margin-top: 4px; font-variant-numeric: tabular-nums; }
-#stageinfo .stars { color: var(--gold); }
-.gauge { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); text-align: center; line-height: 1; }
-.gauge b { display: block; font-size: 84px; font-weight: 800; font-variant-numeric: tabular-nums; text-shadow: 0 3px 12px rgba(0,0,0,0.55); }
-.gauge small { font-size: 18px; color: #e6e9ee; text-shadow: 0 2px 6px rgba(0,0,0,0.6); }
-#gSpeed { left: 26px; }
-#gRpm { right: 26px; }
-#gRpm b { transition: color 0.3s; }
+#minimap { width: 100%; height: 38px; display: block; }
+#stageinfo { display: flex; justify-content: space-between; align-items: center; font-size: 14px; margin-top: 4px; gap: 10px; }
+#stageinfo #sName { font-weight: 700; }
+#stageinfo #sGhost { color: var(--muted); font-family: var(--num); }
+#stageinfo .stars { color: var(--gold); letter-spacing: 1px; }
+
+.gauge { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); padding: 14px 22px 16px; min-width: 210px; }
+.gauge .lbl { font-size: 12px; letter-spacing: 0.1em; color: var(--muted); display: flex; justify-content: space-between; }
+.gauge .val { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+.gauge b { font-family: var(--num); font-size: 84px; font-weight: 700; line-height: 0.95; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+.gauge .unit { font-size: 16px; color: var(--muted); font-weight: 600; }
+.gauge .sub { font-size: 13px; color: var(--muted); margin-top: 6px; font-family: var(--num); }
+.gauge .sub b { font-size: 13px; color: var(--text); font-weight: 600; letter-spacing: 0; }
+#gSpeed { left: 16px; }
+#gRpm { right: 16px; display: flex; gap: 14px; align-items: center; padding-right: 18px; }
+#rpmRing { width: 104px; height: 104px; flex: none; }
+#rpmRing .track { stroke: rgba(255,255,255,0.1); }
+#rpmRing .fill { transition: stroke-dashoffset 0.35s ease-out, stroke 0.35s; }
+#rpmZone { font-size: 13px; font-weight: 700; }
+#hRpm { transition: color 0.35s; }
+
 #terrainBadge {
-  position: absolute; top: 50%; right: 18px; transform: translateY(-50%);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px 14px; font-size: 20px;
+  position: absolute; left: 16px; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 170px);
+  padding: 8px 14px; border-radius: 999px; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;
 }
+#terrainBadge.up { color: #ffb38a; }
+#terrainBadge.down { color: #8fd3ff; }
 #mockPanel {
-  position: absolute; bottom: 150px; right: 18px; pointer-events: auto;
-  background: var(--panel); border: 1px dashed var(--gold); border-radius: 14px; padding: 8px; display: flex; gap: 6px; align-items: center;
+  position: absolute; right: 16px; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 160px); pointer-events: auto;
+  border-radius: 999px; padding: 6px; display: flex; gap: 4px; align-items: center; border: 1px dashed rgba(255,197,61,0.5);
 }
-#mockPanel button { min-height: 44px; padding: 6px 14px; font-size: 20px; }
-#mockPanel span { min-width: 92px; text-align: center; font-variant-numeric: tabular-nums; }
+#mockPanel button { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.08); font-size: 22px; }
+#mockPanel span { min-width: 96px; text-align: center; font-size: 14px; color: var(--gold); }
 #sensorWarn {
-  position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
-  background: rgba(255, 77, 79, 0.92); color: #fff; font-size: 24px; font-weight: 700; padding: 14px 24px; border-radius: 16px;
+  position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%);
+  background: rgba(255, 77, 79, 0.92); color: #fff; font-size: 22px; font-weight: 700; padding: 16px 26px; border-radius: var(--r-md);
+  box-shadow: 0 10px 40px rgba(255,77,79,0.35);
 }
 
 /* ---------- 오버레이 ---------- */
 .overlay {
   position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-  background: rgba(6, 8, 12, 0.6); padding: 20px;
+  background: rgba(6, 8, 12, 0.55); padding: 24px; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
 .dialog {
-  background: var(--panel-solid); border: 1px solid var(--line); border-radius: 24px; padding: 26px;
-  width: min(560px, 100%); text-align: center; max-height: 100%; overflow-y: auto;
+  background: var(--glass-strong); border: 1px solid var(--line-strong); border-radius: 28px; padding: 30px;
+  width: min(620px, 100%); text-align: center; max-height: 100%; overflow-y: auto; box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+  animation: rise 0.3s cubic-bezier(.2,.9,.3,1.2);
 }
-.dialog h2 { margin-top: 0; }
-.dialog .row { justify-content: center; margin-top: 18px; }
-.dialog .row button { flex: 1; }
-.result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0; }
-.result-grid div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
-.result-grid b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
-.result-grid small { color: var(--muted); }
-.result-stars { font-size: 52px; color: var(--gold); letter-spacing: 6px; }
-.badge-new { display: inline-block; background: var(--gold); color: #2a1c00; font-weight: 800; border-radius: 999px; padding: 4px 14px; margin: 4px; }
-.ach-list div { margin: 6px 0; font-size: 19px; }
+@keyframes rise { from { transform: translateY(16px) scale(0.97); opacity: 0; } to { transform: none; opacity: 1; } }
+.dialog h2 { margin: 0 0 6px; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; }
+.dialog .sub { color: var(--muted); margin: 0; font-size: 16px; }
+.dialog .row { display: flex; gap: 12px; justify-content: center; margin-top: 24px; }
+.dialog .row .btn { flex: 1; min-height: 60px; font-size: 18px; }
+.kicker { font-size: 13px; font-weight: 700; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 8px; }
+.result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 22px 0 6px; background: var(--line); border-radius: var(--r-md); overflow: hidden; }
+.result-grid div { background: rgba(20, 25, 33, 0.95); padding: 14px 10px; }
+.result-grid small { display: block; color: var(--muted); font-size: 12px; letter-spacing: 0.06em; margin-bottom: 4px; }
+.result-grid b { font-family: var(--num); font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.result-grid b i { font-style: normal; font-size: 14px; color: var(--muted); margin-left: 3px; font-weight: 500; }
+.result-stars { font-size: 56px; color: var(--gold); letter-spacing: 8px; line-height: 1.1; margin: 8px 0 4px; text-shadow: 0 4px 24px rgba(255,197,61,0.4); }
+.result-stars .off { color: rgba(255,255,255,0.12); text-shadow: none; }
+.badge-new { display: inline-block; background: var(--gold); color: #2a1c00; font-weight: 800; font-size: 14px; border-radius: 999px; padding: 6px 14px; margin: 4px; }
+.badge-new.lose { background: rgba(255,255,255,0.12); color: var(--text); }
+.ach-list div { margin: 8px 0; font-size: 17px; }
+.dialog .note2 { color: var(--dim); font-size: 13px; margin-top: 14px; }
 
-#toasts { position: fixed; top: 130px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; z-index: 20; }
+#toasts { position: fixed; top: 108px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; z-index: 20; }
 .toast {
-  background: rgba(14, 17, 22, 0.92); border: 1px solid var(--gold); color: var(--text); font-size: 22px; font-weight: 700;
-  padding: 12px 22px; border-radius: 16px; animation: pop 0.35s ease-out;
+  background: var(--glass-strong); border: 1px solid var(--line-strong); color: var(--text); font-size: 19px; font-weight: 700;
+  padding: 12px 22px; border-radius: 999px; animation: pop 0.35s cubic-bezier(.2,.9,.3,1.3);
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); box-shadow: 0 10px 30px rgba(0,0,0,0.35);
 }
-@keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.toast.gold { border-color: rgba(255,197,61,0.6); }
+@keyframes pop { from { transform: translateY(-8px) scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
 #connBanner { position: fixed; top: 0; left: 0; right: 0; background: var(--danger); color: #fff; text-align: center; padding: 8px; font-weight: 700; z-index: 30; }
-#rotateHint { position: fixed; inset: 0; background: var(--bg); display: none; align-items: center; justify-content: center; font-size: 26px; text-align: center; z-index: 40; padding: 30px; }
+#rotateHint { position: fixed; inset: 0; background: var(--bg); display: none; align-items: center; justify-content: center; font-size: 24px; text-align: center; z-index: 40; padding: 30px; }
 body.portrait-touch #rotateHint { display: flex; }
 
 /* ---------- 아케이드 ---------- */
-button.grape { background: linear-gradient(135deg, #ff4fd8, #7b5cff); border-color: transparent; color: #fff; font-weight: 700; }
-.big-buttons.three { grid-template-columns: 1fr 1fr 1fr; }
 #rankBox {
-  position: absolute; top: max(66px, calc(env(safe-area-inset-top) + 54px)); left: 14px;
-  font-weight: 900; font-size: 64px; line-height: 1; text-shadow: 0 3px 12px rgba(0,0,0,0.6); font-style: italic;
+  position: absolute; top: calc(max(16px, env(safe-area-inset-top)) + 80px); left: 16px;
+  font-family: var(--num); font-weight: 700; font-size: 64px; line-height: 1; text-shadow: 0 3px 16px rgba(0,0,0,0.5); font-style: italic;
 }
-#rankBox small { font-size: 26px; color: #e6e9ee; font-style: normal; }
+#rankBox small { font-size: 22px; color: rgba(255,255,255,0.8); font-style: normal; margin-left: 2px; }
 #board {
-  position: absolute; top: 150px; left: 14px; background: var(--panel); border: 1px solid var(--line);
-  border-radius: 14px; padding: 6px 8px; font-size: 16px; min-width: 150px; font-variant-numeric: tabular-nums;
+  position: absolute; top: calc(max(16px, env(safe-area-inset-top)) + 152px); left: 16px;
+  border-radius: var(--r-md); padding: 6px; font-size: 15px; min-width: 168px;
+  background: var(--glass); border: 1px solid var(--line); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
 }
-#board div { display: flex; gap: 8px; align-items: center; padding: 3px 4px; border-radius: 8px; }
-#board div.me { background: rgba(255,107,53,0.25); font-weight: 800; }
-#board i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
-#board span.gap { margin-left: auto; color: var(--muted); font-size: 14px; }
+#board div { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-radius: 10px; }
+#board div.me { background: var(--accent-soft); font-weight: 800; }
+#board .pos { font-family: var(--num); color: var(--muted); width: 12px; }
+#board i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+#board span.gap { margin-left: auto; color: var(--muted); font-size: 13px; font-family: var(--num); }
 #itemSlot {
-  position: absolute; top: max(44px, calc(env(safe-area-inset-top) + 32px)); right: 14px; pointer-events: auto;
+  position: absolute; top: calc(max(16px, env(safe-area-inset-top)) + 52px); right: 16px; pointer-events: auto;
   width: 132px; text-align: center; cursor: pointer;
 }
 #itemBox {
-  width: 96px; height: 96px; margin: 0 auto; border-radius: 22px; border: 3px solid rgba(255,255,255,0.85);
-  background: rgba(14,17,22,0.75); display: flex; align-items: center; justify-content: center; font-size: 58px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  width: 92px; height: 92px; margin: 0 auto; border-radius: 24px; border: 2px solid var(--line-strong);
+  background: var(--glass); display: flex; align-items: center; justify-content: center; font-size: 54px;
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
 }
-#itemBox.has { animation: glow 1s ease-in-out infinite alternate; }
+#itemBox.has { border-color: var(--gold); animation: glow 1s ease-in-out infinite alternate; }
 #itemBox.roll { animation: roll 0.12s linear infinite; }
-@keyframes glow { from { box-shadow: 0 0 8px #ffd166; } to { box-shadow: 0 0 26px #ff4fd8; } }
+@keyframes glow { from { box-shadow: 0 0 6px rgba(255,197,61,0.4); } to { box-shadow: 0 0 28px rgba(255,197,61,0.8); } }
 @keyframes roll { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
-#spurtBar { height: 10px; background: rgba(0,0,0,0.5); border-radius: 6px; margin: 6px 8px 0; overflow: hidden; }
-#spurtFill { height: 100%; width: 0; background: linear-gradient(90deg, #ffd166, #ff4fd8); }
-#itemHint { font-size: 13px; color: #fff; text-shadow: 0 1px 4px #000; margin-top: 3px; line-height: 1.25; }
-#effects { position: absolute; top: 210px; right: 14px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
-#effects span { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 16px; font-weight: 700; }
+#spurtBar { height: 6px; background: rgba(255,255,255,0.12); border-radius: 3px; margin: 8px 14px 0; overflow: hidden; }
+#spurtFill { height: 100%; width: 0; background: var(--gold); border-radius: 3px; }
+#itemHint { font-size: 12px; color: rgba(255,255,255,0.9); text-shadow: 0 1px 4px #000; margin-top: 5px; line-height: 1.3; }
+#effects { position: absolute; top: calc(max(16px, env(safe-area-inset-top)) + 210px); right: 16px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+#effects span { background: var(--glass); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 14px; font-weight: 700; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
 #dogPanel {
-  position: absolute; top: 150px; left: 50%; transform: translateX(-50%); width: min(420px, 60vw);
-  background: rgba(120, 40, 20, 0.9); border: 2px solid #ffb703; border-radius: 16px; padding: 10px 14px; text-align: center;
-  font-size: 22px; font-weight: 800; animation: shake 0.3s infinite;
+  position: absolute; top: 120px; left: 50%; transform: translateX(-50%); width: min(420px, 60vw);
+  background: rgba(90, 30, 14, 0.88); border: 1px solid rgba(255,183,3,0.7); border-radius: var(--r-md); padding: 12px 16px; text-align: center;
+  font-size: 20px; font-weight: 800; animation: shake 0.3s infinite;
 }
 @keyframes shake { 0%,100% { transform: translateX(-50%); } 50% { transform: translateX(calc(-50% + 3px)); } }
-#dogBar { height: 12px; background: rgba(0,0,0,0.4); border-radius: 6px; margin-top: 8px; overflow: hidden; }
+#dogBar { height: 8px; background: rgba(0,0,0,0.4); border-radius: 4px; margin-top: 8px; overflow: hidden; }
 #dogFill { height: 100%; background: #ffb703; width: 50%; }
 #countdown {
   position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
-  font-size: min(34vh, 260px); font-weight: 900; color: #fff; text-shadow: 0 8px 30px rgba(0,0,0,0.6); font-style: italic; z-index: 15;
+  font-family: var(--num); font-size: min(34vh, 260px); font-weight: 700; color: #fff; text-shadow: 0 8px 40px rgba(0,0,0,0.5); z-index: 15;
 }
-#countdown.go { color: #80ed99; animation: pop 0.35s ease-out; }
-.podium { margin: 10px 0; text-align: left; }
-.podium div { display: flex; gap: 10px; padding: 6px 10px; border-radius: 10px; font-size: 18px; }
-.podium div.me { background: rgba(255,107,53,0.25); font-weight: 800; }
+#countdown.go { color: var(--good); animation: pop 0.35s ease-out; }
+.podium { margin: 18px 0 4px; text-align: left; border-radius: var(--r-md); overflow: hidden; background: var(--line); display: grid; gap: 1px; }
+.podium div { display: flex; gap: 12px; align-items: center; padding: 10px 14px; font-size: 17px; background: rgba(20, 25, 33, 0.95); }
+.podium div.me { background: #3a2317; font-weight: 800; }
+.podium div.foot { color: var(--muted); font-size: 14px; justify-content: center; }
 
-@media (max-width: 760px) {
-  #board { font-size: 13px; min-width: 120px; top: 130px; }
+@media (max-width: 900px) {
+  .modes { grid-template-columns: 1fr 1fr 1fr; }
+  .mode { min-height: 170px; padding: 18px; }
+  .mode .t { display: block; font-size: 21px; }
+  .hello { font-size: 30px; }
+  .strip b { font-size: 26px; }
+  .gauge b { font-size: 60px; }
+  .gauge { min-width: 160px; padding: 10px 16px 12px; }
+  #rpmRing { width: 78px; height: 78px; }
+  .metrics b { font-size: 20px; }
+  #board { font-size: 13px; min-width: 130px; }
   #rankBox { font-size: 44px; }
   #itemBox { width: 72px; height: 72px; font-size: 42px; }
-  h1 { font-size: 34px; }
-  .stats { grid-template-columns: repeat(2, 1fr); }
-  .gauge b { font-size: 60px; }
-  .pill { font-size: 17px; padding: 6px 10px; }
+  .tip { display: none; }
 }
 </style>
 {% endraw %}
 </head>
 <body>
+<!-- 아이콘 (선 아이콘, currentColor) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-bike" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5 9 9.5h7l2.5 7"/><path d="M9 9.5l3.5 7h6"/><path d="M14.5 6H17l-1 3.5"/><path d="M7.5 7h3"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h12l-2.5 4.5L17 13H5"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12z"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01" stroke-width="3"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 16v5"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4.5a2.5 2.5 0 0 0 2.8 4M17 6h2.5a2.5 2.5 0 0 1-2.8 4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.4-5.7L20 8.5"/><path d="M20 3.5v5h-5"/></symbol>
+    <symbol id="i-ghost" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10a7 7 0 0 1 14 0v10l-2.5-2-2.3 2-2.2-2-2.2 2-2.3-2z"/><path d="M9.5 10.5h.01M14.5 10.5h.01" stroke-width="3"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 10 10l4 4 7-8"/><path d="M16 6h5v5"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l7 8 4-4 7 8"/><path d="M16 18h5v-5"/></symbol>
+  </defs>
+</svg>
+
 <canvas id="game"></canvas>
 
 <!-- 메인 메뉴 -->
 <section class="screen active" id="v-menu">
   <div class="wrap">
-    <div class="row between">
-      <div>
-        <h1>Pedal<span>Quest</span></h1>
-        <p class="sub">페달을 밟으면 달립니다</p>
-      </div>
-      <div style="text-align:right">
-        <div class="sensor" id="menuSensor">센서 확인 중…</div>
-        <button id="btnRescan" class="hidden" style="margin-top:8px;font-size:16px;min-height:40px;padding:6px 14px">센서 다시 찾기</button>
+    <div class="topbar">
+      <div class="brand"><div class="mark"><svg><use href="#i-bike"/></svg></div><b>PEDAL<span>QUEST</span></b></div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button id="btnRescan" class="btn small hidden"><svg class="ico"><use href="#i-refresh"/></svg>센서 다시 찾기</button>
+        <div class="chip"><span class="dot" id="menuDot"></span><span id="menuSensor">센서 확인 중…</span></div>
       </div>
     </div>
-    <div class="stats">
-      <div class="stat"><small>오늘</small><b id="stToday">0.0</b><small>km</small></div>
-      <div class="stat"><small>연속</small><b id="stStreak">0</b><small>일</small></div>
-      <div class="stat"><small>누적 거리</small><b id="stTotal">0</b><small>km</small></div>
-      <div class="stat"><small>누적 라이딩</small><b id="stSessions">0</b><small>회</small></div>
+    <h1 class="hello" id="hello">오늘도 달려볼까요?</h1>
+    <p class="hello-sub" id="helloSub">페달을 밟으면 화면 속 자전거가 달려요</p>
+    <div class="strip glass">
+      <div><small>오늘</small><b class="num" id="stToday">0.0</b><i>km</i></div>
+      <div><small>연속</small><b class="num" id="stStreak">0</b><i>일</i></div>
+      <div><small>누적 거리</small><b class="num" id="stTotal">0</b><i>km</i></div>
+      <div><small>누적 라이딩</small><b class="num" id="stSessions">0</b><i>회</i></div>
     </div>
-    <div class="big-buttons three">
-      <button class="primary huge" id="btnFree">🚴 프리 라이딩<small>끝없는 길 · 도시 → 교외 → 산길 → 해변</small></button>
-      <button class="teal huge" id="btnStages">🏁 스테이지<small>코스 완주 · 별 · 고스트</small></button>
-      <button class="grape huge" id="btnArcade">🍄 아케이드 레이스<small>라이벌 5명 · 아이템 · 코인</small></button>
+    <div class="modes">
+      <button class="mode primary" id="btnFree">
+        <span class="icon"><svg><use href="#i-bike"/></svg></span><span class="go"><svg><use href="#i-arrow"/></svg></span>
+        <span class="t">프리 라이딩</span><span class="d">끝없는 길 · 도시 → 교외 → 산길 → 해변</span>
+      </button>
+      <button class="mode" id="btnStages">
+        <span class="icon"><svg><use href="#i-flag"/></svg></span><span class="go"><svg><use href="#i-arrow"/></svg></span>
+        <span class="t">스테이지</span><span class="d" id="modeStageMeta">5개 코스 · 별 · 고스트</span>
+      </button>
+      <button class="mode" id="btnArcade">
+        <span class="icon"><svg><use href="#i-bolt"/></svg></span><span class="go"><svg><use href="#i-arrow"/></svg></span>
+        <span class="t">아케이드 레이스</span><span class="d">라이벌 5명 · 아이템 · 코인</span>
+      </button>
     </div>
-    <div class="row">
-      <button id="btnRecords">📋 기록</button>
-      <button id="btnAch">🏆 업적</button>
+    <div class="subnav">
+      <button class="btn" id="btnRecords"><svg class="ico"><use href="#i-list"/></svg>기록</button>
+      <button class="btn" id="btnAch"><svg class="ico"><use href="#i-trophy"/></svg>업적</button>
+      <div class="tip">태블릿 설정에서 <b>화면 자동 잠금 '안 함'</b>으로 두면 타는 중에 안 꺼져요<br><span id="connInfo"></span></div>
     </div>
-    <p class="tip" style="margin-top:18px">💡 태블릿 설정에서 <b>화면 자동 잠금을 '안 함'</b>으로 해두면 타는 중에 화면이 꺼지지 않아요.
-      <span id="connInfo"></span></p>
   </div>
 </section>
 
 <!-- 스테이지 선택 -->
 <section class="screen" id="v-stages">
   <div class="wrap">
-    <div class="row between"><h2>🏁 스테이지</h2><button data-back>← 뒤로</button></div>
+    <div class="pagehead"><button class="back" data-back><svg><use href="#i-back"/></svg></button><h2>스테이지</h2></div>
     <div class="cards" id="stageCards"></div>
   </div>
 </section>
@@ -255,12 +389,12 @@ button.grape { background: linear-gradient(135deg, #ff4fd8, #7b5cff); border-col
 <!-- 아케이드 코스 선택 -->
 <section class="screen" id="v-arcade">
   <div class="wrap">
-    <div class="row between"><h2>🍄 아케이드 레이스</h2><button data-back>← 뒤로</button></div>
-    <p class="tip" style="margin-bottom:16px">
-      🎁 <b>아이템 박스</b>를 지나가면 아이템 획득 → <b>평소보다 RPM을 확 올려 2초 버티면 발동!</b> (아이템 칸 터치도 가능)<br>
+    <div class="pagehead"><button class="back" data-back><svg><use href="#i-back"/></svg></button><h2>아케이드 레이스</h2></div>
+    <div class="note glass">
+      🎁 <b>아이템 박스</b>를 지나가면 아이템 획득 → <b>평소보다 RPM을 확 올려 2초 버티면 발동</b> (아이템 칸 터치도 가능)<br>
       🪙 코인은 모을수록 빨라져요 (최대 +10%) · ⚡ 파란 발판은 가속 · 💨 앞 선수 바로 뒤에 붙으면 드래프팅<br>
-      🐕 개가 쫓아오면 전력 질주! · 🍌 라이벌 바나나 조심
-    </p>
+      🐕 개가 쫓아오면 전력 질주 · 🍌 라이벌 바나나 조심
+    </div>
     <div class="cards" id="arcadeCards"></div>
   </div>
 </section>
@@ -268,16 +402,18 @@ button.grape { background: linear-gradient(135deg, #ff4fd8, #7b5cff); border-col
 <!-- 기록 -->
 <section class="screen" id="v-records">
   <div class="wrap">
-    <div class="row between"><h2>📋 기록</h2><button data-back>← 뒤로</button></div>
-    <table><thead><tr><th>날짜</th><th>모드</th><th>거리</th><th>시간</th><th>평균</th><th>최고</th><th>RPM</th><th>kcal</th></tr></thead>
-      <tbody id="recordRows"></tbody></table>
+    <div class="pagehead"><button class="back" data-back><svg><use href="#i-back"/></svg></button><h2>기록</h2></div>
+    <div class="table glass">
+      <table><thead><tr><th>날짜</th><th>모드</th><th>거리</th><th>시간</th><th>평균 km/h</th><th>최고</th><th>RPM</th><th>kcal</th></tr></thead>
+        <tbody id="recordRows"></tbody></table>
+    </div>
   </div>
 </section>
 
 <!-- 업적 -->
 <section class="screen" id="v-achievements">
   <div class="wrap">
-    <div class="row between"><h2>🏆 업적</h2><button data-back>← 뒤로</button></div>
+    <div class="pagehead"><button class="back" data-back><svg><use href="#i-back"/></svg></button><h2>업적</h2></div>
     <div class="ach" id="achCards"></div>
   </div>
 </section>
@@ -285,13 +421,15 @@ button.grape { background: linear-gradient(135deg, #ff4fd8, #7b5cff); border-col
 <!-- 플레이 HUD -->
 <div id="hud" class="hidden">
   <div class="top">
-    <div class="pill"><span id="hDist">0.00</span><small>km</small></div>
-    <div class="pill"><span id="hTime">00:00</span></div>
-    <div class="pill"><span id="hCal">0</span><small>kcal</small></div>
-    <div class="pill hidden" id="coinPill">🪙 <span id="hCoins">0</span></div>
+    <div class="panel metrics">
+      <div><small>거리</small><b class="num" id="hDist">0.00</b><i>km</i></div>
+      <div><small>시간</small><b class="num" id="hTime">00:00</b></div>
+      <div><small>칼로리</small><b class="num" id="hCal">0</b><i>kcal</i></div>
+      <div class="hidden" id="coinPill"><small>코인</small><b class="num" id="hCoins">0</b></div>
+    </div>
   </div>
   <div id="arcadeHud" class="hidden">
-    <div id="rankBox"><span id="hRank">1</span><small>위 / <span id="hRiders">6</span></small></div>
+    <div id="rankBox"><span id="hRank">1</span><small>/ <span id="hRiders">6</span></small></div>
     <div id="board"></div>
     <div id="itemSlot">
       <div id="itemBox"></div>
@@ -301,36 +439,52 @@ button.grape { background: linear-gradient(135deg, #ff4fd8, #7b5cff); border-col
     <div id="effects"></div>
     <div id="dogPanel" class="hidden">🐕 개가 쫓아온다! <span id="dogText"></span><div id="dogBar"><div id="dogFill"></div></div></div>
   </div>
-  <div id="sensorDot"></div>
-  <div id="stagebar" class="hidden">
+  <div id="sensorDot" class="chip"></div>
+  <div id="stagebar" class="panel hidden">
     <canvas id="minimap"></canvas>
     <div id="stageinfo"><span id="sName"></span><span id="sGhost"></span><span class="stars" id="sStars"></span></div>
   </div>
-  <div id="terrainBadge" class="hidden"></div>
-  <div class="gauge" id="gSpeed"><b id="hSpeed">0</b><small>km/h</small></div>
-  <div class="gauge" id="gRpm"><b id="hRpm">0</b><small>RPM</small></div>
-  <div id="mockPanel" class="hidden">
-    <button data-mock="-10">−</button><span id="mockVal">목표 0</span><button data-mock="10">+</button>
+  <div id="terrainBadge" class="panel hidden"></div>
+  <div class="gauge panel" id="gSpeed">
+    <div class="lbl"><span>속도</span></div>
+    <div class="val"><b id="hSpeed">0</b><span class="unit">km/h</span></div>
+    <div class="sub">평균 <b id="hAvg">0.0</b> · 최고 <b id="hMax">0.0</b></div>
   </div>
-  <div id="sensorWarn" class="hidden">⚠ 센서 연결 끊김 — 페달을 돌려주세요</div>
+  <div class="gauge panel" id="gRpm">
+    <svg id="rpmRing" viewBox="0 0 100 100">
+      <circle class="track" cx="50" cy="50" r="42" fill="none" stroke-width="9" stroke-linecap="round" stroke-dasharray="197.9 263.9" transform="rotate(135 50 50)"/>
+      <circle class="fill" id="rpmFill" cx="50" cy="50" r="42" fill="none" stroke-width="9" stroke-linecap="round" stroke-dasharray="0 263.9" transform="rotate(135 50 50)" stroke="#5ab0ff"/>
+    </svg>
+    <div>
+      <div class="lbl"><span>케이던스</span></div>
+      <div class="val"><b id="hRpm">0</b><span class="unit">rpm</span></div>
+      <div class="sub"><span id="rpmZone">휴식</span> · 평균 <b id="hAvgRpm">0</b></div>
+    </div>
+  </div>
+  <div id="mockPanel" class="panel hidden">
+    <button data-mock="-10">−</button><span id="mockVal" class="num">목표 0</span><button data-mock="10">+</button>
+  </div>
+  <div id="sensorWarn" class="hidden">센서 연결 끊김 — 페달을 돌려주세요</div>
 </div>
 
 <!-- 일시정지 -->
 <div class="overlay hidden" id="pauseOverlay">
   <div class="dialog">
+    <div class="kicker">PAUSED</div>
     <h2 id="pauseTitle">일시정지</h2>
     <p class="sub" id="pauseSub"></p>
     <div class="row">
-      <button class="primary" id="btnResume">▶ 계속 달리기</button>
-      <button id="btnStop">■ 종료하고 저장</button>
+      <button class="btn primary" id="btnResume"><svg class="ico"><use href="#i-play"/></svg>계속 달리기</button>
+      <button class="btn" id="btnStop"><svg class="ico"><use href="#i-stop"/></svg>종료하고 저장</button>
     </div>
   </div>
 </div>
 
 <!-- 결과 -->
 <section class="screen" id="v-result">
-  <div class="overlay" style="position:static;min-height:100%;background:none">
+  <div class="overlay" style="position:static;min-height:100%;background:none;-webkit-backdrop-filter:none;backdrop-filter:none">
     <div class="dialog">
+      <div class="kicker" id="rKicker">RIDE COMPLETE</div>
       <h2 id="rTitle">라이딩 완료</h2>
       <div class="result-stars" id="rStars"></div>
       <div id="rBadges"></div>
@@ -344,8 +498,8 @@ button.grape { background: linear-gradient(135deg, #ff4fd8, #7b5cff); border-col
       </div>
       <div class="podium" id="rPodium"></div>
       <div class="ach-list" id="rAch"></div>
-      <p class="sub" id="rNote"></p>
-      <div class="row"><button class="primary" id="btnMenu">메뉴로</button></div>
+      <div class="row"><button class="btn primary" id="btnMenu">메뉴로</button></div>
+      <p class="note2" id="rNote"></p>
     </div>
   </div>
 </section>
@@ -353,7 +507,7 @@ button.grape { background: linear-gradient(135deg, #ff4fd8, #7b5cff); border-col
 <div id="countdown" class="hidden"></div>
 <div id="toasts"></div>
 <div id="connBanner" class="hidden">서버 연결 끊김 — 다시 연결하는 중…</div>
-<div id="rotateHint">📱↻<br>태블릿을 가로로 돌려주세요</div>
+<div id="rotateHint">태블릿을 가로로 돌려주세요</div>
 
 <script src="/static/nosleep.min.js"></script>
 <script>const MOCK = {{ 'true' if mock else 'false' }};</script>
@@ -375,6 +529,7 @@ const fmtTime = (s) => {
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 };
 const starStr = (n, max = 3) => "★".repeat(n || 0) + "☆".repeat(max - (n || 0));
+const starHtml = (n, max = 3) => "★".repeat(n || 0) + `<span class="off">${"★".repeat(max - (n || 0))}</span>`;
 const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const hash2 = (n) => hash(n * 1.7 + 19.3);
 const hash3 = (n) => hash(n * 3.1 + 7.7);
@@ -457,8 +612,19 @@ async function loadMenu() {
     $("stStreak").textContent = st.streak_days;
     $("stTotal").textContent = (st.total_distance_m / 1000).toFixed(1);
     $("stSessions").textContent = st.total_sessions;
-    $("connInfo").textContent = ` · 태블릿 접속 주소: ${info.url}`;
+    $("connInfo").textContent = `태블릿 접속 주소 ${info.url}`;
+    const hr = new Date().getHours();
+    $("hello").textContent = hr < 5 ? "늦은 밤에도 달려볼까요?" : hr < 11 ? "좋은 아침이에요" : hr < 17 ? "오늘도 달려볼까요?" : hr < 21 ? "퇴근길 한 바퀴 어때요?" : "자기 전에 가볍게 한 판?";
+    const today = st.today_distance_m / 1000;
+    $("helloSub").textContent = today >= 0.1 ? `오늘 벌써 ${today.toFixed(1)}km 달렸어요. 조금만 더 가볼까요?`
+      : st.streak_days > 0 ? `${st.streak_days}일 연속 라이딩 중! 오늘도 이어가요`
+      : "페달을 밟으면 화면 속 자전거가 달려요";
   } catch (e) { /* 서버 재연결 중 */ }
+  try {
+    const stages = await api("/api/stages");
+    const got = stages.reduce((n, s) => n + (s.best_stars || 0), 0);
+    $("modeStageMeta").textContent = `${stages.length}개 코스 · 별 ${got}/${stages.length * 3} · 고스트`;
+  } catch (e) { /* 무시 */ }
 }
 
 async function loadStages(boxId, arcade) {
@@ -468,26 +634,25 @@ async function loadStages(boxId, arcade) {
   for (const s of stages) {
     const card = document.createElement("div");
     card.className = "card";
-    const best = s.best_sec ? `최고 ${fmtTime(s.best_sec)}` : "기록 없음";
+    const head = `<div class="head"><span class="no">${String(s.id).padStart(2, "0")}</span><h3>${s.name}</h3></div>`;
     if (arcade) {
-      card.innerHTML = `
-        <h3>${s.id}. ${s.name}</h3>
+      card.innerHTML = `${head}
         <div class="meta">${(s.distance_m / 1000).toFixed(1)}km · 라이벌 5명</div>
         <canvas class="profile"></canvas>
-        <div class="btns"><button class="grape" data-go>🍄 레이스 시작</button></div>`;
+        <div class="btns"><button class="btn primary" data-go><svg class="ico"><use href="#i-bolt"/></svg>레이스 시작</button></div>`;
       card.querySelector("[data-go]").addEventListener("click", () => { userGesture(); send({ command: "start_arcade", stage_id: s.id }); });
       box.appendChild(card);
       drawProfile(card.querySelector("canvas"), buildTrack({ terrain: s.terrain, distance_m: s.distance_m }), s.distance_m);
       continue;
     }
-    card.innerHTML = `
-      <h3>${s.id}. ${s.name}</h3>
+    card.innerHTML = `${head}
       <div class="meta">${(s.distance_m / 1000).toFixed(1)}km · ★★★ ${fmtTime(s.stars["3"])} 이내</div>
       <canvas class="profile"></canvas>
-      <div class="row between"><span class="stars">${starStr(s.best_stars)}</span><span class="meta" style="margin:0">${best}</span></div>
+      <div class="row2"><span class="stars">${starHtml(s.best_stars)}</span>
+        <span class="best">${s.best_sec ? `최고 <b class="num">${fmtTime(s.best_sec)}</b>` : "기록 없음"}</span></div>
       <div class="btns">
-        <button class="primary" data-go>달리기</button>
-        <button data-ghost ${s.best_sec ? "" : "disabled"}>👻 고스트와</button>
+        <button class="btn primary" data-go><svg class="ico"><use href="#i-play"/></svg>달리기</button>
+        <button class="btn" data-ghost ${s.best_sec ? "" : "disabled"}><svg class="ico"><use href="#i-ghost"/></svg>고스트와</button>
       </div>`;
     card.querySelector("[data-go]").addEventListener("click", () => { userGesture(); send({ command: "start_stage", stage_id: s.id, ghost: false }); });
     card.querySelector("[data-ghost]").addEventListener("click", () => { userGesture(); send({ command: "start_stage", stage_id: s.id, ghost: true }); });
@@ -510,11 +675,14 @@ async function loadRecords() {
 
 async function loadAchievements() {
   const list = await api("/api/achievements");
-  $("achCards").innerHTML = list.map((a) => `
-    <div class="card ${a.unlocked_at ? "" : "locked"}">
-      <h3>${a.name}</h3><div class="meta">${a.desc}</div>
-      <div class="meta">${a.unlocked_at ? a.unlocked_at.slice(0, 10) + " 달성" : "잠김"}</div>
-    </div>`).join("");
+  $("achCards").innerHTML = list.map((a) => {
+    const [emo, ...rest] = a.name.split(" ");  // "🚲 첫 라이딩" → 아이콘 + 이름
+    return `<div class="card ${a.unlocked_at ? "" : "locked"}">
+      <div class="emo">${emo}</div>
+      <div><h3>${rest.join(" ")}</h3><div class="meta">${a.desc}</div>
+      <div class="meta">${a.unlocked_at ? a.unlocked_at.slice(0, 10) + " 달성" : "잠김"}</div></div>
+    </div>`;
+  }).join("");
 }
 
 // =====================================================================
@@ -562,12 +730,13 @@ function onState(s) {
 
   // 메뉴 센서 상태
   const sen = s.sensor || {};
-  $("menuSensor").textContent = sen.mock ? "🧪 Mock 모드 (키보드 ↑↓)" : sen.connected ? "🟢 센서 연결됨" : `🔴 ${sen.message || "센서 없음"}`;
-  $("btnRescan").classList.toggle("hidden", !!sen.mock);
+  $("menuSensor").textContent = sen.mock ? "Mock 모드 · 키보드 ↑↓" : sen.connected ? "센서 연결됨" : sen.message || "센서 없음";
+  $("menuDot").className = "dot " + (sen.mock ? "mock" : sen.connected ? "on" : "off");
+  $("btnRescan").classList.toggle("hidden", !!sen.mock || !!sen.connected);
 }
 
 function onEvent(e) {
-  if (e.kind === "achievement") { toast(`🏆 업적 달성! ${e.name}`); audio.chime("achievement"); }
+  if (e.kind === "achievement") { toast(`🏆 업적 달성! ${e.name}`, "gold"); audio.chime("achievement"); }
   else if (e.kind === "overtake") { toast("👻 고스트 추월!"); audio.chime("overtake"); }
   else if (e.kind === "overtaken") { toast("고스트가 앞질렀어요! 힘내요 💪"); audio.chime("overtaken"); }
   else if (e.kind === "theme_change") { toast(`${THEME_NAMES[e.theme] || e.theme} 구간 진입`); }
@@ -575,9 +744,9 @@ function onEvent(e) {
   else onArcadeEvent(e);
 }
 
-function toast(text) {
+function toast(text, cls = "") {
   const el = document.createElement("div");
-  el.className = "toast";
+  el.className = "toast " + cls;
   el.textContent = text;
   $("toasts").appendChild(el);
   setTimeout(() => el.remove(), 3500);
@@ -590,24 +759,27 @@ function renderResult(r) {
     : r.mode === "arcade"
       ? (r.finished ? (r.rank === 1 ? "🏆 우승!" : `${r.rank}위로 골인!`) : "레이스 중단")
       : "프리 라이딩 완료";
+  $("rKicker").textContent = r.mode === "stage" ? "STAGE" : r.mode === "arcade" ? "RACE" : "FREE RIDE";
+  $("rKicker").textContent += r.finished || r.mode === "free" ? " COMPLETE" : " ENDED";
   const medal = ["🥇", "🥈", "🥉"];
   $("rPodium").innerHTML = r.mode === "arcade" && r.leaderboard
-    ? r.leaderboard.map((x, i) => `<div class="${x.is_player ? "me" : ""}"><b>${medal[i] || (i + 1) + "위"}</b>
-        <span style="color:${x.color}">●</span> ${x.name}</div>`).join("")
-      + `<div>🪙 코인 ${r.coins} · 🎁 아이템 ${r.items_used}번 · 🐕 탈출 ${r.dogs_escaped} / 잡힘 ${r.dogs_caught}</div>`
+    ? r.leaderboard.map((x, i) => `<div class="${x.is_player ? "me" : ""}"><b class="num" style="width:28px">${medal[i] || i + 1}</b>
+        <i style="width:8px;height:8px;border-radius:50%;background:${x.color}"></i>${x.name}</div>`).join("")
+      + `<div class="foot">🪙 코인 ${r.coins} · 🎁 아이템 ${r.items_used}번 · 🐕 탈출 ${r.dogs_escaped} / 잡힘 ${r.dogs_caught}</div>`
     : "";
-  $("rStars").textContent = r.mode === "stage" && r.finished ? starStr(r.stars)
-    : r.mode === "arcade" && r.finished ? (["🥇", "🥈", "🥉"][r.rank - 1] || "🏁") : "";
+  $("rStars").innerHTML = r.mode === "stage" && r.finished ? starHtml(r.stars)
+    : r.mode === "arcade" && r.finished ? (medal[r.rank - 1] || "🏁") : "";
   let badges = "";
-  if (r.new_best) badges += `<span class="badge-new">🎉 새 최고 기록</span>`;
-  if (r.ghost_won === true) badges += `<span class="badge-new">👻 고스트 승리</span>`;
-  if (r.ghost_won === false && r.finished) badges += `<span class="badge-new" style="background:#555;color:#fff">👻 고스트에게 졌어요</span>`;
+  if (r.new_best) badges += `<span class="badge-new">새 최고 기록</span>`;
+  if (r.ghost_won === true) badges += `<span class="badge-new">고스트 승리</span>`;
+  if (r.ghost_won === false && r.finished) badges += `<span class="badge-new lose">고스트에게 졌어요</span>`;
   $("rBadges").innerHTML = badges;
-  $("rDist").textContent = (r.distance_m / 1000).toFixed(2) + "km";
+  const unit = (v, u) => `${v}<i>${u}</i>`;
+  $("rDist").innerHTML = unit((r.distance_m / 1000).toFixed(2), "km");
   $("rTime").textContent = fmtTime(r.elapsed_sec);
-  $("rCal").textContent = Math.round(r.calories) + "kcal";
-  $("rAvg").textContent = (r.avg_speed || 0).toFixed(1);
-  $("rMax").textContent = (r.max_speed || 0).toFixed(1);
+  $("rCal").innerHTML = unit(Math.round(r.calories), "kcal");
+  $("rAvg").innerHTML = unit((r.avg_speed || 0).toFixed(1), "km/h");
+  $("rMax").innerHTML = unit((r.max_speed || 0).toFixed(1), "km/h");
   $("rRpm").textContent = Math.round(r.avg_rpm || 0);
   $("rAch").innerHTML = (r.new_achievements || []).map((id) => `<div>🏆 ${achMeta[id] ? achMeta[id].name : id}</div>`).join("");
   $("rNote").textContent = r.saved ? "기록이 저장됐어요." : "200m · 1분 미만이라 기록은 저장하지 않았어요.";
@@ -719,10 +891,26 @@ function themeAt(d) {
 // 테마 팔레트
 // =====================================================================
 const THEMES = {
-  city:     { skyTop: [96, 160, 220], skyBot: [214, 232, 245], ground: [[132, 138, 142], [124, 130, 134]], road: [[82, 86, 92], [78, 82, 88]], rumble: [[220, 60, 60], [240, 240, 240]], lane: [245, 245, 235] },
-  suburb:   { skyTop: [90, 170, 235], skyBot: [220, 240, 250], ground: [[112, 184, 76], [102, 172, 68]], road: [[96, 98, 104], [90, 92, 98]], rumble: [[240, 240, 240], [200, 200, 200]], lane: [250, 220, 90] },
-  mountain: { skyTop: [120, 170, 210], skyBot: [226, 236, 242], ground: [[88, 140, 70], [80, 130, 63]], road: [[100, 96, 92], [94, 90, 86]], rumble: [[230, 230, 230], [120, 110, 100]], lane: [245, 245, 235] },
-  beach:    { skyTop: [40, 170, 230], skyBot: [200, 238, 250], ground: [[232, 212, 158], [224, 203, 148]], road: [[110, 110, 116], [104, 104, 110]], rumble: [[255, 255, 255], [255, 120, 80]], lane: [255, 255, 255] },
+  city: {
+    skyTop: [52, 104, 168], skyMid: [124, 170, 214], skyBot: [214, 224, 232],
+    ground: [[118, 124, 128], [113, 119, 123]], verge: [[150, 152, 154], [144, 146, 148]],
+    road: [[70, 74, 80], [67, 71, 77]], edge: [236, 236, 230], lane: [240, 206, 90],
+  },
+  suburb: {
+    skyTop: [48, 118, 196], skyMid: [120, 180, 228], skyBot: [218, 234, 242],
+    ground: [[104, 162, 74], [98, 155, 69]], verge: [[84, 136, 60], [80, 130, 57]],
+    road: [[78, 80, 86], [75, 77, 83]], edge: [240, 240, 234], lane: [244, 208, 88],
+  },
+  mountain: {
+    skyTop: [62, 112, 164], skyMid: [134, 172, 204], skyBot: [220, 228, 234],
+    ground: [[86, 128, 70], [81, 122, 66]], verge: [[124, 116, 104], [118, 110, 98]],
+    road: [[80, 78, 76], [77, 75, 73]], edge: [236, 236, 230], lane: [240, 240, 232],
+  },
+  beach: {
+    skyTop: [28, 128, 204], skyMid: [104, 186, 232], skyBot: [214, 238, 246],
+    ground: [[224, 204, 158], [218, 198, 152]], verge: [[236, 220, 182], [230, 214, 176]],
+    road: [[88, 90, 96], [85, 87, 93]], edge: [250, 250, 246], lane: [250, 250, 246],
+  },
 };
 const rgb = (c) => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
 const mix = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
@@ -753,6 +941,65 @@ function resize() {
 }
 addEventListener("resize", resize);
 
+// 하늘: 테마별 그라데이션 + 해 번짐 (정적이라 캐시)
+function skyLayer(theme) {
+  const key = "sky-" + theme;
+  if (bgCache[key]) return bgCache[key];
+  const t = THEMES[theme];
+  const c = document.createElement("canvas");
+  c.width = Math.max(64, Math.round(W / 2)); c.height = Math.max(32, Math.round((HORIZON + 2) / 2)); // 부드러운 그라데이션이라 절반 해상도로 충분
+  const g = c.getContext("2d");
+  const gr = g.createLinearGradient(0, 0, 0, c.height);
+  gr.addColorStop(0, rgb(t.skyTop)); gr.addColorStop(0.62, rgb(t.skyMid)); gr.addColorStop(1, rgb(t.skyBot));
+  g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height);
+  const sx = c.width * 0.78, sy = c.height * 0.42, r = c.height * 0.9;
+  const sun = g.createRadialGradient(sx, sy, 0, sx, sy, r);
+  sun.addColorStop(0, "rgba(255,248,225,0.9)"); sun.addColorStop(0.05, "rgba(255,244,214,0.55)");
+  sun.addColorStop(0.3, "rgba(255,236,200,0.14)"); sun.addColorStop(1, "rgba(255,236,200,0)");
+  g.fillStyle = sun; g.fillRect(0, 0, c.width, c.height);
+  bgCache[key] = c;
+  return c;
+}
+
+// 구름: 흰 뭉게구름 띠 (가로로 이어지게, 천천히 흘러감)
+function cloudLayer() {
+  if (bgCache.cloud) return bgCache.cloud;
+  const bw = Math.max(600, Math.round(W * 2)), bh = Math.max(80, Math.round(HORIZON * 0.75));
+  const c = document.createElement("canvas");
+  c.width = bw; c.height = bh;
+  const g = c.getContext("2d");
+  for (let i = 0; i < 14; i++) {
+    const cx = hash(i + 50) * bw, cy = bh * (0.15 + hash2(i + 50) * 0.65), s = (0.5 + hash3(i + 50)) * bh * 0.09;
+    const far = cy / bh;  // 아래쪽(지평선 가까이)일수록 작고 흐리게
+    for (let k = 0; k < 7; k++) {
+      const px = cx + (k - 3) * s * 0.9 + (hash(i * 7 + k) - 0.5) * s * 0.6;
+      const py = cy - Math.sin((k / 6) * Math.PI) * s * 0.55;
+      const pr = s * (0.55 + Math.sin((k / 6) * Math.PI) * 0.5);
+      for (const ox of [0, -bw, bw]) {
+        const gr = g.createRadialGradient(px + ox, py, 0, px + ox, py, pr);
+        gr.addColorStop(0, `rgba(255,255,255,${0.55 - far * 0.25})`); gr.addColorStop(0.6, `rgba(255,255,255,${0.35 - far * 0.15})`); gr.addColorStop(1, "rgba(255,255,255,0)");
+        g.fillStyle = gr; g.beginPath(); g.arc(px + ox, py, pr, 0, Math.PI * 2); g.fill();
+      }
+    }
+  }
+  bgCache.cloud = c;
+  return c;
+}
+
+// 비네팅 (화면 가장자리를 살짝 어둡게 → 시선이 도로로)
+function vignetteLayer() {
+  if (bgCache.vig) return bgCache.vig;
+  const c = document.createElement("canvas");
+  c.width = Math.max(64, Math.round(W / 2)); c.height = Math.max(64, Math.round(H / 2));
+  const g = c.getContext("2d");
+  const gr = g.createRadialGradient(c.width / 2, c.height * 0.55, c.height * 0.35, c.width / 2, c.height * 0.55, c.width * 0.75);
+  gr.addColorStop(0, "rgba(0,0,0,0)"); gr.addColorStop(1, "rgba(0,0,0,0.38)");
+  g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height);
+  bgCache.vig = c;
+  return c;
+}
+
+// 먼 배경: 여러 겹을 멀수록 옅게 (대기 원근)
 function bgLayer(theme) {
   if (bgCache[theme]) return bgCache[theme];
   const bw = Math.max(400, Math.round(W * 2)), bh = Math.max(100, Math.round(H * 0.3));
@@ -760,46 +1007,71 @@ function bgLayer(theme) {
   c.width = bw; c.height = bh;
   const g = c.getContext("2d");
   const wave = (x, k, p) => Math.sin((x / bw) * Math.PI * 2 * k + p); // bw 주기로 이어지게
+  const haze = THEMES[theme].skyBot;
+  const tint = (col, a) => rgb(mix(col, haze, a));
+  const ridge = (col, base, amp, parts, sharp) => {
+    const pts = [];
+    for (let x = 0; x <= bw; x += 4) {
+      let v = 0;
+      for (const [k, p, w] of parts) v += w * (sharp ? Math.abs(wave(x, k, p)) : 0.5 + 0.5 * wave(x, k, p));
+      pts.push([x, bh - bh * (base + amp * v)]);
+    }
+    const top = Math.min(...pts.map((p) => p[1]));
+    const gr = g.createLinearGradient(0, top, 0, bh);
+    gr.addColorStop(0, col[0]); gr.addColorStop(1, col[1]);
+    g.fillStyle = gr; g.beginPath(); g.moveTo(0, bh);
+    for (const [x, y] of pts) g.lineTo(x, y);
+    g.lineTo(bw, bh); g.fill();
+    return pts;
+  };
 
   if (theme === "city") {
-    let x = 0, i = 0;
-    while (x < bw) {
-      const w = 30 + hash(i) * 60, h = bh * (0.25 + hash2(i) * 0.65);
-      g.fillStyle = `rgba(${70 + hash3(i) * 30},${90 + hash3(i) * 30},${120 + hash3(i) * 30},0.9)`;
-      g.fillRect(x, bh - h, Math.min(w, bw - x), h);
-      g.fillStyle = "rgba(255,240,180,0.35)";
-      for (let wy = bh - h + 8; wy < bh - 6; wy += 12)
-        for (let wx = x + 5; wx < x + w - 6 && wx < bw - 4; wx += 10)
-          if (hash(wx * 0.37 + wy) > 0.55) g.fillRect(wx, wy, 4, 5);
-      x += w + 2; i++;
+    for (const [layer, far] of [[0, 0.62], [1, 0.3]]) {
+      let x = -hash(layer) * 40, i = layer * 500;
+      while (x < bw) {
+        const w = (layer ? 34 : 22) + hash(i) * (layer ? 60 : 40);
+        const h = bh * (layer ? 0.2 + hash2(i) * 0.55 : 0.35 + hash2(i) * 0.6);
+        const base = [58 + hash3(i) * 24, 72 + hash3(i) * 24, 96 + hash3(i) * 24];
+        g.fillStyle = tint(base, far);
+        g.fillRect(x, bh - h, w, h);
+        if (hash(i + 3) > 0.7) g.fillRect(x + w * 0.4, bh - h - bh * 0.05, 2, bh * 0.05); // 안테나
+        if (layer) {
+          g.fillStyle = "rgba(255,255,255,0.06)"; g.fillRect(x, bh - h, w * 0.35, h); // 빛 받는 면
+          g.fillStyle = "rgba(255,236,190,0.22)";
+          for (let wy = bh - h + 6; wy < bh - 4; wy += 7)
+            for (let wx = x + 3; wx < x + w - 4; wx += 6)
+              if (hash(wx * 0.37 + wy * 1.3) > 0.62) g.fillRect(wx, wy, 2.5, 3);
+        }
+        x += w + (layer ? 3 : 1); i++;
+      }
     }
   } else if (theme === "suburb") {
-    for (const [col, amp, base, k] of [["#8fbf9a", 0.35, 0.55, 3], ["#6aa66f", 0.25, 0.35, 5]]) {
-      g.fillStyle = col; g.beginPath(); g.moveTo(0, bh);
-      for (let x = 0; x <= bw; x += 8) g.lineTo(x, bh - bh * (base + amp * 0.5 * (wave(x, k, 0) + 0.6 * wave(x, k * 2 + 1, 1.3))));
-      g.lineTo(bw, bh); g.fill();
+    ridge([tint([96, 140, 150], 0.55), tint([120, 160, 150], 0.6)], 0.45, 0.35, [[2, 0, 0.6], [5, 1.3, 0.4]], false);
+    ridge([tint([88, 150, 96], 0.35), tint([110, 165, 100], 0.4)], 0.28, 0.3, [[3, 0.7, 0.6], [7, 2.1, 0.4]], false);
+    const near = ridge([tint([74, 138, 70], 0.12), tint([92, 152, 78], 0.15)], 0.1, 0.22, [[5, 2, 0.6], [11, 0.4, 0.4]], false);
+    g.fillStyle = tint([52, 104, 56], 0.15);  // 언덕 위 나무 점
+    for (let i = 0; i < 90; i++) {
+      const p = near[Math.floor(hash(i + 9) * near.length)];
+      const r = 2 + hash2(i + 9) * 4;
+      g.beginPath(); g.arc(p[0], p[1] + r * 0.6 + hash3(i) * bh * 0.08, r, 0, Math.PI * 2); g.fill();
     }
   } else if (theme === "mountain") {
-    for (const [col, amp, base, k, snow] of [["#8da3b8", 0.6, 0.35, 4, true], ["#5f7d6a", 0.35, 0.2, 7, false]]) {
-      g.fillStyle = col; g.beginPath(); g.moveTo(0, bh);
-      const pts = [];
-      for (let x = 0; x <= bw; x += 6) {
-        const y = bh - bh * (base + amp * (0.5 * Math.abs(wave(x, k, 0.4)) + 0.3 * Math.abs(wave(x, k * 3 + 1, 2)) + 0.2 * Math.abs(wave(x, k * 7 + 2, 1))));
-        pts.push([x, y]); g.lineTo(x, y);
-      }
-      g.lineTo(bw, bh); g.fill();
-      if (snow) {
-        g.fillStyle = "rgba(255,255,255,0.75)";
-        for (const [x, y] of pts) if (y < bh * 0.3) g.fillRect(x - 3, y, 6, Math.max(2, bh * 0.3 - y) * 0.4);
-      }
-    }
+    const far = ridge([tint([120, 140, 168], 0.45), tint([150, 166, 186], 0.6)], 0.3, 0.7, [[3, 0.4, 0.55], [7, 2, 0.3], [15, 1, 0.15]], true);
+    g.fillStyle = "rgba(255,255,255,0.8)";   // 만년설
+    for (const [x, y] of far) if (y < bh * 0.3) g.fillRect(x - 2, y, 4, Math.max(2, bh * 0.3 - y) * 0.5);
+    ridge([tint([74, 104, 96], 0.3), tint([90, 118, 104], 0.4)], 0.18, 0.42, [[5, 1.1, 0.55], [11, 0.3, 0.3], [23, 2.2, 0.15]], true);
+    ridge([tint([58, 96, 66], 0.1), tint([70, 108, 72], 0.15)], 0.05, 0.2, [[7, 0.5, 0.6], [17, 1.7, 0.4]], true);
   } else if (theme === "beach") {
-    g.fillStyle = "#2f9fd6"; g.fillRect(0, bh * 0.72, bw, bh * 0.28);
-    g.fillStyle = "rgba(255,255,255,0.35)";
-    for (let i = 0; i < 80; i++) g.fillRect(hash(i) * bw, bh * (0.75 + hash2(i) * 0.23), 10 + hash3(i) * 30, 2);
-    g.fillStyle = "#7fb8a0"; g.beginPath(); g.moveTo(0, bh * 0.72);
-    for (let x = 0; x <= bw; x += 8) g.lineTo(x, bh * 0.72 - Math.max(0, bh * 0.25 * wave(x, 2, 0.5) - bh * 0.1));
-    g.lineTo(bw, bh * 0.72); g.fill();
+    ridge([tint([96, 146, 150], 0.55), tint([120, 160, 160], 0.6)], 0.22, 0.25, [[1, 0.5, 0.7], [4, 2, 0.3]], false);
+    const seaTop = bh * 0.68;
+    const sea = g.createLinearGradient(0, seaTop, 0, bh);
+    sea.addColorStop(0, rgb(mix([40, 150, 205], haze, 0.35))); sea.addColorStop(1, "rgb(26,126,184)");
+    g.fillStyle = sea; g.fillRect(0, seaTop, bw, bh - seaTop);
+    g.fillStyle = "rgba(255,255,255,0.55)";   // 물결 반짝임
+    for (let i = 0; i < 140; i++) {
+      const yy = seaTop + 2 + hash2(i) * (bh - seaTop - 4);
+      g.fillRect(hash(i) * bw, yy, 6 + hash3(i) * 26 * (yy / bh), 1.2);
+    }
   }
   bgCache[theme] = c;
   return c;
@@ -808,88 +1080,178 @@ function bgLayer(theme) {
 // =====================================================================
 // 오브젝트 그리기 (좌표: 바닥 중앙 x,y / m = 1미터당 픽셀)
 // =====================================================================
+// 도로와 나란한 옆면을 그리기 위한 원근 투영: (px,py)에서 d미터 뒤에 있는 점
+function back(px, py, m, d) {
+  const z = F / m, r = z / (z + d);
+  return [W / 2 + (px - W / 2) * r, HORIZON + (py - HORIZON) * r];
+}
+function sideFace(x0, yBot, yTop, m, d, col) {
+  const [bx, by] = back(x0, yBot, m, d), [tx, ty] = back(x0, yTop, m, d);
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.moveTo(x0, yBot); ctx.lineTo(x0, yTop); ctx.lineTo(tx, ty); ctx.lineTo(bx, by); ctx.fill();
+}
+function groundShadow(x, y, rx, ry) {
+  ctx.fillStyle = "rgba(0,0,0,0.16)";
+  ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+}
+const shade = (c, k) => rgb([c[0] * k, c[1] * k, c[2] * k]);
+
 function drawLamp(x, y, m) {
-  ctx.fillStyle = "#3a3f47";
-  ctx.fillRect(x - 0.08 * m, y - 5 * m, 0.16 * m, 5 * m);
-  ctx.fillRect(x - 0.08 * m, y - 5 * m, 1.1 * m * Math.sign(W / 2 - x || 1), 0.14 * m);
-  ctx.fillStyle = "#ffe9a8";
-  ctx.fillRect(x + 0.9 * m * Math.sign(W / 2 - x || 1) - 0.2 * m, y - 4.9 * m, 0.4 * m, 0.14 * m);
+  const dir = Math.sign(W / 2 - x) || 1;
+  ctx.strokeStyle = "#41464e"; ctx.lineCap = "round";
+  ctx.lineWidth = Math.max(1, 0.14 * m);
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 5.2 * m);
+  ctx.quadraticCurveTo(x, y - 5.8 * m, x + 0.6 * m * dir, y - 5.8 * m); ctx.lineTo(x + 1.3 * m * dir, y - 5.8 * m); ctx.stroke();
+  ctx.fillStyle = "#2c3036"; ctx.fillRect(x + 1.0 * m * dir - 0.35 * m, y - 5.9 * m, 0.7 * m, 0.22 * m);
+  ctx.fillStyle = "#fff4cf"; ctx.fillRect(x + 1.0 * m * dir - 0.28 * m, y - 5.68 * m, 0.56 * m, 0.07 * m);
+  ctx.fillStyle = "#353a41"; ctx.fillRect(x - 0.14 * m, y - 0.8 * m, 0.28 * m, 0.8 * m); // 받침
 }
+
+const BUILDINGS = [[154, 165, 177], [184, 164, 142], [133, 147, 163], [194, 182, 163], [111, 127, 145], [168, 159, 150]];
 function drawBuilding(x, y, m, v) {
-  const w = (7 + v * 8) * m, h = (10 + hash2(v * 100) * 22) * m;
-  const cols = ["#8c96a3", "#a9927d", "#7b8797", "#b5a58f", "#6f7d8c"];
-  ctx.fillStyle = cols[Math.floor(v * cols.length) % cols.length];
-  ctx.fillRect(x - w / 2, y - h, w, h);
-  if (m > 2) {
-    ctx.fillStyle = "rgba(40,60,90,0.55)";
-    const ws = 1.6 * m;
-    for (let wy = y - h + ws * 0.6; wy < y - ws * 1.2; wy += ws * 1.4)
-      for (let wx = x - w / 2 + ws * 0.5; wx < x + w / 2 - ws * 0.8; wx += ws * 1.3)
-        ctx.fillRect(wx, wy, ws * 0.7, ws * 0.8);
+  const w = (8 + v * 8) * m, h = (12 + hash2(v * 100) * 24) * m, d = 10 + v * 10;
+  const base = BUILDINGS[Math.floor(v * BUILDINGS.length) % BUILDINGS.length];
+  const inner = x < W / 2 ? x + w / 2 : x - w / 2;
+  sideFace(inner, y, y - h, m, d, shade(base, 0.72));
+  ctx.fillStyle = rgb(base); ctx.fillRect(x - w / 2, y - h, w, h);
+  ctx.fillStyle = "rgba(255,255,255,0.14)"; ctx.fillRect(x - w / 2, y - h, w, 0.45 * m);   // 옥상 난간
+  ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.fillRect(x - w / 2, y - 3.4 * m, w, 3.4 * m);     // 1층 상가
+  if (m > 1.2) {
+    ctx.fillStyle = "rgba(255,255,255,0.18)"; ctx.fillRect(x - w / 2, y - 3.6 * m, w, 0.2 * m);
+    const ws = 1.5 * m, gx = ws * 1.35, gy = ws * 1.55;
+    const cols = Math.max(1, Math.floor((w - ws) / gx)), ox = x - (cols * gx - (gx - ws)) / 2;
+    for (let wy = y - h + ws * 0.9, r = 0; wy < y - 4.2 * m; wy += gy, r++)
+      for (let k = 0; k < cols; k++) {
+        const lit = hash(v * 97 + r * 13 + k) > 0.8;
+        ctx.fillStyle = lit ? "rgba(255,226,160,0.75)" : "rgba(34,50,72,0.62)";
+        ctx.fillRect(ox + k * gx, wy, ws, ws * 1.05);
+        if (!lit) { ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(ox + k * gx, wy, ws, ws * 0.3); }
+      }
   }
 }
-function drawTree(x, y, m, v) {
-  const s = 0.8 + v * 0.6;
-  ctx.fillStyle = "#6b4a2b";
-  ctx.fillRect(x - 0.2 * m * s, y - 2.2 * m * s, 0.4 * m * s, 2.2 * m * s);
-  ctx.fillStyle = v > 0.5 ? "#3f8f3a" : "#4fa046";
-  ctx.beginPath(); ctx.arc(x, y - 3.4 * m * s, 1.8 * m * s, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.12)";
-  ctx.beginPath(); ctx.arc(x - 0.6 * m * s, y - 3.9 * m * s, 0.8 * m * s, 0, Math.PI * 2); ctx.fill();
-}
+
 function drawHouse(x, y, m, v) {
-  const w = 7 * m, h = 3.6 * m;
-  ctx.fillStyle = ["#f1e3c8", "#dfe7ef", "#f3d1c1"][Math.floor(v * 3)];
-  ctx.fillRect(x - w / 2, y - h, w, h);
-  ctx.fillStyle = ["#b0453a", "#4a5d7a", "#6b4f3a"][Math.floor(v * 3)];
-  ctx.beginPath(); ctx.moveTo(x - w * 0.6, y - h); ctx.lineTo(x, y - h - 2.8 * m); ctx.lineTo(x + w * 0.6, y - h); ctx.fill();
-  ctx.fillStyle = "#5a4636"; ctx.fillRect(x - 0.6 * m, y - 2.1 * m, 1.2 * m, 2.1 * m);
-  ctx.fillStyle = "#9cc7e8"; ctx.fillRect(x + 1.4 * m, y - 2.6 * m, 1.3 * m, 1.1 * m);
+  const w = 7 * m, h = 3.4 * m, rh = 2.6 * m, d = 8;
+  const i = Math.floor(v * 3);
+  const wall = [[241, 227, 200], [223, 231, 239], [243, 209, 193]][i], roof = [[168, 64, 52], [70, 88, 116], [104, 78, 58]][i];
+  const dir = x < W / 2 ? 1 : -1, inner = x + dir * w / 2;
+  groundShadow(x + dir * w * 0.1, y, w * 0.62, 0.35 * m);
+  sideFace(inner, y, y - h, m, d, shade(wall, 0.78));
+  const eave = [inner + dir * 0.4 * m, y - h + 0.1 * m], ridge = [x, y - h - rh];
+  const [ex, ey] = back(eave[0], eave[1], m, d + 0.5), [rx, ry] = back(ridge[0], ridge[1], m, d + 0.5);
+  ctx.fillStyle = shade(roof, 0.85);
+  ctx.beginPath(); ctx.moveTo(eave[0], eave[1]); ctx.lineTo(ridge[0], ridge[1]); ctx.lineTo(rx, ry); ctx.lineTo(ex, ey); ctx.fill();
+  ctx.fillStyle = rgb(wall); ctx.fillRect(x - w / 2, y - h, w, h);
+  ctx.beginPath(); ctx.moveTo(x - w * 0.5, y - h); ctx.lineTo(x, y - h - rh); ctx.lineTo(x + w * 0.5, y - h); ctx.fill();
+  ctx.strokeStyle = rgb(roof); ctx.lineWidth = Math.max(1, 0.35 * m); ctx.lineJoin = "round";
+  ctx.beginPath(); ctx.moveTo(x - w * 0.56, y - h + 0.1 * m); ctx.lineTo(x, y - h - rh); ctx.lineTo(x + w * 0.56, y - h + 0.1 * m); ctx.stroke();
+  ctx.fillStyle = "rgba(0,0,0,0.12)"; ctx.fillRect(x - w / 2, y - h, w, 0.3 * m);   // 처마 그림자
+  ctx.fillStyle = "#5a4636"; ctx.fillRect(x - 0.55 * m, y - 2.1 * m, 1.1 * m, 2.1 * m);
+  for (const wx of [-2.2, 1.3]) {
+    ctx.fillStyle = "#f7f7f2"; ctx.fillRect(x + wx * m - 0.08 * m, y - 2.7 * m, 1.06 * m, 1.06 * m);
+    ctx.fillStyle = "#7fb0d6"; ctx.fillRect(x + wx * m, y - 2.62 * m, 0.9 * m, 0.9 * m);
+    ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fillRect(x + wx * m, y - 2.62 * m, 0.9 * m, 0.25 * m);
+  }
 }
+
+const TREE_TONES = {
+  city: ["#2b5a36", "#3b7a43", "#6aa05b"],
+  suburb: ["#2e6a33", "#428f40", "#78b85f"],
+  autumn: ["#8a4a1e", "#c46a24", "#e8a449"],
+};
+function drawTree(x, y, m, v, tones = TREE_TONES.suburb) {
+  const s = 0.85 + v * 0.6, u = m * s;
+  groundShadow(x + 0.4 * u, y, 1.9 * u, 0.3 * u);
+  ctx.fillStyle = "#5b4331";
+  ctx.beginPath(); ctx.moveTo(x - 0.24 * u, y); ctx.lineTo(x - 0.12 * u, y - 3 * u); ctx.lineTo(x + 0.12 * u, y - 3 * u); ctx.lineTo(x + 0.24 * u, y); ctx.fill();
+  const blobs = [[0, -3.7, 1.75], [-1.0, -3.1, 1.25], [1.0, -3.2, 1.3], [0.1, -4.7, 1.3]];
+  ctx.fillStyle = tones[0];
+  for (const [bx, by, r] of blobs) { ctx.beginPath(); ctx.arc(x + bx * u, y + by * u, r * u, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = tones[1];
+  for (const [bx, by, r] of blobs) { ctx.beginPath(); ctx.arc(x + (bx - 0.25) * u, y + (by - 0.25) * u, r * 0.78 * u, 0, Math.PI * 2); ctx.fill(); }
+  if (m > 2) {
+    ctx.fillStyle = tones[2];
+    ctx.beginPath(); ctx.arc(x - 0.55 * u, y - 4.6 * u, 0.6 * u, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x - 1.3 * u, y - 3.5 * u, 0.4 * u, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
 function drawPine(x, y, m, v) {
-  const s = 0.9 + v * 0.9;
-  ctx.fillStyle = "#5b3f28"; ctx.fillRect(x - 0.18 * m * s, y - 1.2 * m * s, 0.36 * m * s, 1.2 * m * s);
-  ctx.fillStyle = v > 0.5 ? "#2f6b3c" : "#357a44";
-  for (let i = 0; i < 3; i++) {
-    const by = y - (1 + i * 1.6) * m * s, hw = (1.9 - i * 0.45) * m * s;
-    ctx.beginPath(); ctx.moveTo(x - hw, by); ctx.lineTo(x, by - 2.6 * m * s); ctx.lineTo(x + hw, by); ctx.fill();
+  const s = 0.9 + v * 0.9, u = m * s;
+  groundShadow(x + 0.3 * u, y, 1.5 * u, 0.25 * u);
+  ctx.fillStyle = "#4e3726"; ctx.fillRect(x - 0.17 * u, y - 1.3 * u, 0.34 * u, 1.3 * u);
+  const dark = v > 0.5 ? "#234f2f" : "#285a35", light = v > 0.5 ? "#3a7446" : "#43804e";
+  for (let i = 0; i < 4; i++) {
+    const by = y - (0.8 + i * 1.35) * u, hw = (2.0 - i * 0.42) * u, top = by - 2.3 * u;
+    ctx.fillStyle = dark;
+    ctx.beginPath(); ctx.moveTo(x - hw, by); ctx.lineTo(x, top); ctx.lineTo(x + hw, by); ctx.fill();
+    ctx.fillStyle = light;
+    ctx.beginPath(); ctx.moveTo(x - hw, by); ctx.lineTo(x, top); ctx.lineTo(x - hw * 0.05, by + 0.1 * u); ctx.fill();
   }
 }
+
 function drawRock(x, y, m, v) {
-  const s = 0.6 + v;
-  ctx.fillStyle = "#8a857e";
-  ctx.beginPath(); ctx.moveTo(x - 1.2 * m * s, y); ctx.lineTo(x - 0.8 * m * s, y - 0.9 * m * s);
-  ctx.lineTo(x + 0.2 * m * s, y - 1.2 * m * s); ctx.lineTo(x + 1.1 * m * s, y - 0.5 * m * s); ctx.lineTo(x + 1.3 * m * s, y); ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.15)";
-  ctx.beginPath(); ctx.moveTo(x - 0.8 * m * s, y - 0.9 * m * s); ctx.lineTo(x + 0.2 * m * s, y - 1.2 * m * s); ctx.lineTo(x - 0.1 * m * s, y - 0.5 * m * s); ctx.fill();
+  const s = 0.6 + v, u = m * s;
+  groundShadow(x + 0.2 * u, y, 1.4 * u, 0.2 * u);
+  ctx.fillStyle = "#7c776f";
+  ctx.beginPath(); ctx.moveTo(x - 1.2 * u, y); ctx.lineTo(x - 0.8 * u, y - 0.9 * u);
+  ctx.lineTo(x + 0.2 * u, y - 1.2 * u); ctx.lineTo(x + 1.1 * u, y - 0.5 * u); ctx.lineTo(x + 1.3 * u, y); ctx.fill();
+  ctx.fillStyle = "#a29d94";
+  ctx.beginPath(); ctx.moveTo(x - 1.2 * u, y); ctx.lineTo(x - 0.8 * u, y - 0.9 * u); ctx.lineTo(x + 0.2 * u, y - 1.2 * u); ctx.lineTo(x - 0.1 * u, y - 0.4 * u); ctx.lineTo(x - 0.4 * u, y); ctx.fill();
 }
+
 function drawPalm(x, y, m, v) {
-  const s = 0.9 + v * 0.5, lean = (v - 0.5) * 2 * m;
-  ctx.strokeStyle = "#8a6a45"; ctx.lineWidth = 0.35 * m * s; ctx.lineCap = "round";
-  ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + lean * 0.2, y - 4 * m * s, x + lean, y - 7 * m * s); ctx.stroke();
-  ctx.strokeStyle = "#2e8b45"; ctx.lineWidth = 0.3 * m * s;
-  const tx = x + lean, ty = y - 7 * m * s;
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
+  const s = 0.9 + v * 0.5, u = m * s, lean = (v - 0.5) * 2 * m;
+  groundShadow(x + lean * 0.6, y, 1.8 * u, 0.25 * u);
+  const tx = x + lean, ty = y - 7 * u;
+  ctx.strokeStyle = "#8a6a45"; ctx.lineWidth = 0.38 * u; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + lean * 0.2, y - 4 * u, tx, ty); ctx.stroke();
+  if (m > 2) {
+    ctx.strokeStyle = "rgba(60,40,20,0.35)"; ctx.lineWidth = 0.08 * u;
+    for (let k = 1; k < 9; k++) {
+      const t = k / 9, px = lerp(x, tx, t * t) , py = lerp(y, ty, t);
+      ctx.beginPath(); ctx.moveTo(px - 0.18 * u, py); ctx.lineTo(px + 0.18 * u, py - 0.05 * u); ctx.stroke();
+    }
+  }
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + v, dx = Math.cos(a), droop = 0.6 + Math.abs(Math.sin(a)) * 1.4;
+    const ex = tx + dx * 3.2 * u, ey = ty + droop * u;
+    ctx.fillStyle = i % 2 ? "#2f8a47" : "#3fa257";
     ctx.beginPath(); ctx.moveTo(tx, ty);
-    ctx.quadraticCurveTo(tx + Math.cos(a) * 1.8 * m * s, ty - 1.2 * m * s, tx + Math.cos(a) * 3 * m * s, ty + (0.4 + Math.abs(Math.sin(a))) * m * s);
-    ctx.stroke();
+    ctx.quadraticCurveTo(tx + dx * 1.6 * u, ty - 1.3 * u, ex, ey);
+    ctx.quadraticCurveTo(tx + dx * 1.5 * u, ty - 0.5 * u, tx, ty + 0.2 * u); ctx.fill();
+  }
+  ctx.fillStyle = "#5c4a2a"; ctx.beginPath(); ctx.arc(tx, ty + 0.15 * u, 0.3 * u, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawParasol(x, y, m, v) {
+  groundShadow(x, y, 1.4 * m, 0.25 * m);
+  ctx.fillStyle = "#777"; ctx.fillRect(x - 0.05 * m, y - 2.4 * m, 0.1 * m, 2.4 * m);
+  const c1 = v > 0.5 ? "#ff6b6b" : "#4dabf7";
+  for (let k = 0; k < 6; k++) {
+    ctx.fillStyle = k % 2 ? "#fafafa" : c1;
+    const a1 = -1.4 + (k / 6) * 2.8, a2 = -1.4 + ((k + 1) / 6) * 2.8;
+    ctx.beginPath(); ctx.moveTo(x, y - 3.1 * m);
+    ctx.lineTo(x + a1 * m, y - 2.15 * m + Math.abs(a1) * 0.05 * m); ctx.lineTo(x + a2 * m, y - 2.15 * m + Math.abs(a2) * 0.05 * m); ctx.fill();
   }
 }
-function drawParasol(x, y, m, v) {
-  ctx.fillStyle = "#666"; ctx.fillRect(x - 0.05 * m, y - 2.4 * m, 0.1 * m, 2.4 * m);
-  ctx.fillStyle = v > 0.5 ? "#ff6b6b" : "#4dabf7";
-  ctx.beginPath(); ctx.moveTo(x - 1.4 * m, y - 2.1 * m); ctx.quadraticCurveTo(x, y - 3.3 * m, x + 1.4 * m, y - 2.1 * m); ctx.fill();
-}
+
 function drawFinishArch(x, y, m, roadHalf) {
-  const hw = roadHalf + 0.6 * m;
-  ctx.fillStyle = "#333";
-  ctx.fillRect(x - hw - 0.15 * m, y - 4.2 * m, 0.3 * m, 4.2 * m);
-  ctx.fillRect(x + hw - 0.15 * m, y - 4.2 * m, 0.3 * m, 4.2 * m);
-  ctx.fillStyle = "#ff6b35"; ctx.fillRect(x - hw, y - 4.4 * m, hw * 2, 1.1 * m);
+  const hw = roadHalf + 0.8 * m;
+  ctx.fillStyle = "#23272e";
+  for (const px of [x - hw, x + hw]) ctx.fillRect(px - 0.18 * m, y - 4.6 * m, 0.36 * m, 4.6 * m);
+  ctx.fillStyle = "#15181d"; ctx.fillRect(x - hw - 0.2 * m, y - 4.9 * m, (hw + 0.2 * m) * 2, 1.2 * m);
+  ctx.fillStyle = "#ff6a2b"; ctx.fillRect(x - hw - 0.2 * m, y - 3.82 * m, (hw + 0.2 * m) * 2, 0.12 * m);
+  if (m > 2) {  // 체크무늬 띠
+    const cw = 0.3 * m, n = Math.floor(((hw + 0.2 * m) * 2) / cw);
+    for (let k = 0; k < n; k++) for (let r = 0; r < 2; r++) {
+      ctx.fillStyle = (k + r) % 2 ? "#fff" : "#15181d";
+      ctx.fillRect(x - hw - 0.2 * m + k * cw, y - 4.9 * m + r * 0.15 * m, cw, 0.15 * m);
+    }
+  }
   if (m > 3) {
-    ctx.fillStyle = "#fff"; ctx.font = `800 ${Math.round(0.8 * m)}px system-ui`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("FINISH", x, y - 3.85 * m);
+    ctx.fillStyle = "#fff"; ctx.font = `800 ${Math.round(0.62 * m)}px system-ui`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("FINISH", x, y - 4.2 * m);
   }
 }
 
@@ -912,17 +1274,36 @@ function drawRider(x, y, m, angle, o) {
     ctx.fillStyle = "rgba(255,230,90,0.9)";
     ctx.beginPath(); ctx.moveTo(x - 0.07 * m, y - 0.12 * m); ctx.lineTo(x + 0.07 * m, y - 0.12 * m); ctx.lineTo(x, y + fl * 0.6 * m); ctx.fill();
   }
+  const frame = o.frame || "#262a31";
 
-  // 그림자
-  ctx.fillStyle = "rgba(0,0,0,0.22)";
-  ctx.beginPath(); ctx.ellipse(x, y, 0.45 * m, 0.07 * m, 0, 0, Math.PI * 2); ctx.fill();
-
-  // 뒷바퀴
-  ctx.strokeStyle = o.tire; ctx.lineWidth = 0.055 * m;
-  ctx.beginPath(); ctx.ellipse(x, y - 0.35 * m, 0.035 * m, 0.34 * m, 0, 0, Math.PI * 2); ctx.stroke();
+  // 그림자 (넓고 옅은 것 + 좁고 진한 것)
+  ctx.fillStyle = "rgba(0,0,0,0.14)";
+  ctx.beginPath(); ctx.ellipse(x + 0.08 * m, y + 0.01 * m, 0.6 * m, 0.1 * m, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(0,0,0,0.2)";
+  ctx.beginPath(); ctx.ellipse(x, y, 0.22 * m, 0.045 * m, 0, 0, Math.PI * 2); ctx.fill();
 
   const crankY = y - 0.32 * m;
   const hipY = y - (0.98 + standing) * m;
+  const shY = y - (1.33 + standing) * m;
+  const bx = x + sway * 1.4;
+  const handY = y - 1.1 * m;
+
+  // 핸들바 (몸 뒤로 양끝이 보임)
+  ctx.strokeStyle = "#17191d"; ctx.lineWidth = 0.045 * m;
+  ctx.beginPath(); ctx.moveTo(x - 0.34 * m, handY + 0.02 * m); ctx.lineTo(x + 0.34 * m, handY + 0.02 * m); ctx.stroke();
+
+  // 뒷바퀴: 타이어 + 림 + 허브
+  ctx.strokeStyle = o.tire; ctx.lineWidth = 0.075 * m;
+  ctx.beginPath(); ctx.ellipse(x, y - 0.35 * m, 0.04 * m, 0.335 * m, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = "rgba(200,205,215,0.45)"; ctx.lineWidth = 0.014 * m;
+  ctx.beginPath(); ctx.ellipse(x, y - 0.35 * m, 0.02 * m, 0.29 * m, 0, 0, Math.PI * 2); ctx.stroke();
+  // 시트포스트 + 변속기
+  ctx.strokeStyle = frame; ctx.lineWidth = 0.05 * m;
+  ctx.beginPath(); ctx.moveTo(x, y - 0.35 * m); ctx.lineTo(x + sway * 0.6, hipY + 0.06 * m); ctx.stroke();
+  ctx.fillStyle = "#3b4048";
+  ctx.beginPath(); ctx.arc(x + 0.07 * m, y - 0.3 * m, 0.045 * m, 0, Math.PI * 2); ctx.fill();
+
+  // 다리
   for (const side of [-1, 1]) {
     const a = angle + (side < 0 ? 0 : Math.PI);
     const pedalY = crankY + Math.cos(a) * 0.17 * m;
@@ -931,51 +1312,81 @@ function drawRider(x, y, m, angle, o) {
     const hipX = x + side * 0.1 * m + sway;
     const kneeX = x + side * (0.15 + 0.05 * lift) * m + sway * 0.5;
     const kneeY = lerp(hipY, pedalY, 0.48) - (0.05 + 0.12 * lift) * m;
-    ctx.strokeStyle = o.shorts; ctx.lineWidth = 0.13 * m;
-    ctx.beginPath(); ctx.moveTo(hipX, hipY); ctx.lineTo(kneeX, kneeY); ctx.stroke();
-    ctx.strokeStyle = o.skin; ctx.lineWidth = 0.09 * m;
-    ctx.beginPath(); ctx.moveTo(kneeX, kneeY); ctx.lineTo(pedalX, pedalY - 0.06 * m); ctx.stroke();
+    const ankleY = pedalY - 0.1 * m;
+    ctx.strokeStyle = o.shorts; ctx.lineWidth = 0.15 * m;
+    ctx.beginPath(); ctx.moveTo(hipX, hipY); ctx.lineTo(lerp(hipX, kneeX, 0.8), lerp(hipY, kneeY, 0.8)); ctx.stroke();
+    ctx.strokeStyle = o.skin; ctx.lineWidth = 0.1 * m;
+    ctx.beginPath(); ctx.moveTo(lerp(hipX, kneeX, 0.75), lerp(hipY, kneeY, 0.75)); ctx.lineTo(kneeX, kneeY); ctx.lineTo(pedalX, ankleY); ctx.stroke();
+    ctx.strokeStyle = o.sock || "#f1f1f1"; ctx.lineWidth = 0.085 * m;
+    ctx.beginPath(); ctx.moveTo(lerp(kneeX, pedalX, 0.78), lerp(kneeY, ankleY, 0.78)); ctx.lineTo(pedalX, ankleY + 0.02 * m); ctx.stroke();
     ctx.fillStyle = o.shoe;
-    ctx.beginPath(); ctx.ellipse(pedalX, pedalY - 0.02 * m, 0.06 * m, 0.045 * m, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(pedalX, pedalY - 0.03 * m, 0.065 * m, 0.05 * m, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath(); ctx.ellipse(pedalX, pedalY - 0.005 * m, 0.06 * m, 0.02 * m, 0, 0, Math.PI * 2); ctx.fill();
   }
 
-  // 엉덩이 + 안장
+  // 안장 + 엉덩이
+  ctx.fillStyle = "#15171b";
+  ctx.beginPath(); ctx.ellipse(x + sway, hipY + 0.07 * m, 0.09 * m, 0.035 * m, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = o.shorts;
-  ctx.beginPath(); ctx.ellipse(x + sway, hipY, 0.18 * m, 0.1 * m, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x + sway, hipY, 0.19 * m, 0.11 * m, 0, 0, Math.PI * 2); ctx.fill();
 
-  // 몸통
-  const shY = y - (1.33 + standing) * m;
-  const bx = x + sway * 1.4;
-  ctx.fillStyle = o.jersey;
-  ctx.beginPath();
-  ctx.moveTo(x + sway - 0.17 * m, hipY - 0.03 * m);
-  ctx.lineTo(bx - 0.23 * m, shY + 0.05 * m);
-  ctx.quadraticCurveTo(bx, shY - 0.06 * m, bx + 0.23 * m, shY + 0.05 * m);
-  ctx.lineTo(x + sway + 0.17 * m, hipY - 0.03 * m);
-  ctx.closePath(); ctx.fill();
+  // 몸통 (저지)
+  const torso = () => {
+    ctx.beginPath();
+    ctx.moveTo(x + sway - 0.18 * m, hipY - 0.02 * m);
+    ctx.lineTo(bx - 0.24 * m, shY + 0.06 * m);
+    ctx.quadraticCurveTo(bx, shY - 0.07 * m, bx + 0.24 * m, shY + 0.06 * m);
+    ctx.lineTo(x + sway + 0.18 * m, hipY - 0.02 * m);
+    ctx.closePath();
+  };
+  ctx.fillStyle = o.jersey; torso(); ctx.fill();
+  ctx.save(); torso(); ctx.clip();
+  ctx.fillStyle = "rgba(0,0,0,0.2)";   // 오른쪽 그늘 (빛은 왼쪽 위에서)
+  ctx.fillRect(bx + 0.06 * m, shY - 0.1 * m, 0.3 * m, hipY - shY + 0.2 * m);
+  ctx.fillStyle = "rgba(255,255,255,0.14)";
+  ctx.beginPath(); ctx.ellipse(bx - 0.1 * m, shY + 0.1 * m, 0.1 * m, 0.07 * m, -0.3, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = o.stripe;
-  ctx.fillRect(bx - 0.2 * m, shY + 0.13 * m, 0.4 * m, 0.05 * m);
+  ctx.fillRect(bx - 0.3 * m, shY + 0.12 * m, 0.6 * m, 0.045 * m);
+  ctx.fillStyle = "rgba(0,0,0,0.1)";   // 뒷주머니 3개
+  for (const k of [-1, 0, 1]) ctx.fillRect(x + sway + k * 0.1 * m - 0.046 * m, hipY - 0.1 * m, 0.092 * m, 0.075 * m);
+  ctx.fillStyle = "rgba(0,0,0,0.16)";
+  ctx.fillRect(x + sway - 0.15 * m, hipY - 0.1 * m, 0.3 * m, 0.012 * m);
+  ctx.restore();
 
-  // 팔
+  // 팔: 소매 → 팔뚝 → 장갑
   for (const side of [-1, 1]) {
-    ctx.strokeStyle = o.jersey; ctx.lineWidth = 0.08 * m;
-    const sx = bx + side * 0.2 * m, hx = x + side * 0.3 * m, hy = y - 1.12 * m;
-    const ex = lerp(sx, hx, 0.5) + side * 0.03 * m, ey = lerp(shY + 0.05 * m, hy, 0.5);
-    ctx.beginPath(); ctx.moveTo(sx, shY + 0.06 * m); ctx.lineTo(ex, ey); ctx.stroke();
-    ctx.strokeStyle = o.skin; ctx.lineWidth = 0.06 * m;
-    ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(hx, hy); ctx.stroke();
+    const sx = bx + side * 0.21 * m, sy = shY + 0.06 * m;
+    const hx = x + side * 0.3 * m, hy = handY;
+    const ex = lerp(sx, hx, 0.5) + side * 0.035 * m, ey = lerp(sy, hy, 0.5);
+    ctx.strokeStyle = o.jersey; ctx.lineWidth = 0.09 * m;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(lerp(sx, ex, 0.55), lerp(sy, ey, 0.55)); ctx.stroke();
+    ctx.strokeStyle = o.skin; ctx.lineWidth = 0.065 * m;
+    ctx.beginPath(); ctx.moveTo(lerp(sx, ex, 0.5), lerp(sy, ey, 0.5)); ctx.lineTo(ex, ey); ctx.lineTo(hx, hy - 0.02 * m); ctx.stroke();
+    ctx.fillStyle = "#1c1f24";
+    ctx.beginPath(); ctx.arc(hx, hy, 0.042 * m, 0, Math.PI * 2); ctx.fill();
   }
 
-  // 헬멧
+  // 목 + 헬멧
+  ctx.fillStyle = o.skin;
+  ctx.fillRect(bx - 0.045 * m, shY - 0.08 * m, 0.09 * m, 0.08 * m);
   ctx.fillStyle = o.helmet;
-  ctx.beginPath(); ctx.ellipse(bx, shY - 0.1 * m, 0.13 * m, 0.11 * m, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.lineWidth = 0.015 * m;
-  for (const dx of [-0.05, 0, 0.05]) { ctx.beginPath(); ctx.moveTo(bx + dx * m, shY - 0.2 * m); ctx.lineTo(bx + dx * m, shY - 0.02 * m); ctx.stroke(); }
+  ctx.beginPath(); ctx.ellipse(bx, shY - 0.12 * m, 0.14 * m, 0.12 * m, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(0,0,0,0.16)";
+  ctx.beginPath(); ctx.ellipse(bx, shY - 0.12 * m, 0.14 * m, 0.12 * m, 0, 0.15 * Math.PI, 0.85 * Math.PI); ctx.fill();
+  ctx.fillStyle = "rgba(20,24,30,0.55)";  // 통풍구
+  for (const dx of [-0.07, 0, 0.07]) {
+    ctx.beginPath(); ctx.ellipse(bx + dx * m, shY - 0.15 * m, 0.018 * m, 0.05 * m, dx * 3, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  ctx.beginPath(); ctx.ellipse(bx - 0.06 * m, shY - 0.2 * m, 0.04 * m, 0.02 * m, -0.4, 0, Math.PI * 2); ctx.fill();
 
   // 후미등 (깜빡)
   if (o.light && Math.floor(performance.now() / 500) % 2 === 0) {
-    ctx.fillStyle = "#ff2a2a";
-    ctx.fillRect(x - 0.04 * m, y - 0.78 * m, 0.08 * m, 0.05 * m);
+    ctx.fillStyle = "rgba(255,40,40,0.35)";
+    ctx.beginPath(); ctx.arc(x, y - 0.76 * m, 0.09 * m, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#ff3030";
+    ctx.fillRect(x - 0.035 * m, y - 0.79 * m, 0.07 * m, 0.06 * m);
   }
   if (o.bubble) {
     ctx.fillStyle = "rgba(120,220,255,0.18)"; ctx.strokeStyle = "rgba(160,235,255,0.8)"; ctx.lineWidth = 0.03 * m;
@@ -989,8 +1400,8 @@ function drawRider(x, y, m, angle, o) {
     const fs = clamp(0.2 * m, 11, 20);
     ctx.font = `800 ${fs}px system-ui`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
     ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.6)";
-    ctx.strokeText(o.label, bx, shY - 0.24 * m);
-    ctx.fillStyle = o.jersey; ctx.fillText(o.label, bx, shY - 0.24 * m);
+    ctx.strokeText(o.label, bx, shY - 0.26 * m);
+    ctx.fillStyle = o.jersey; ctx.fillText(o.label, bx, shY - 0.26 * m);
   }
   ctx.restore();
 }
@@ -1068,42 +1479,51 @@ const segBuf = Array.from({ length: DRAW }, () => ({}));
 let bgOffset = 0;
 const speedLines = [];
 
+const segFog = (n) => clamp(1 - Math.exp(-Math.pow(n / DRAW, 2) * 4), 0, 0.9);
+
 function curveAt(idx) {
   return 0.0016 * Math.sin(idx * 0.011) * Math.max(0, Math.sin(idx * 0.0037 + 1.2));
 }
 
+let ambientDist = 0;   // 메뉴 화면 뒤 배경: 천천히 달리는 모습
 function render(dt, now) {
-  const pos = disp.dist;
+  const pos = view === "game" ? disp.dist : ambientDist;
   const camZ = pos - CAM_BACK;
   const bob = Math.sin(disp.angle * 2) * 0.015 * clamp(disp.speed / 20, 0, 1);
   const camY = elevAt(pos) + CAM_H + bob;
   const theme = THEMES[curTheme];
-  const fogCol = theme.skyBot;
 
-  // 하늘
+  // 하늘 (테마 전환 시 크로스페이드)
   themeFade = Math.min(1, themeFade + dt / 1.8);
   const pt = THEMES[prevTheme];
-  const skyTop = mix(pt.skyTop, theme.skyTop, themeFade), skyBot = mix(pt.skyBot, theme.skyBot, themeFade);
-  const grad = ctx.createLinearGradient(0, 0, 0, HORIZON);
-  grad.addColorStop(0, rgb(skyTop)); grad.addColorStop(1, rgb(skyBot));
-  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, HORIZON + 2);
+  const fogCol = mix(pt.skyBot, theme.skyBot, themeFade);
+  if (themeFade < 1) ctx.drawImage(skyLayer(prevTheme), 0, 0, W, HORIZON + 2);
+  ctx.globalAlpha = themeFade; ctx.drawImage(skyLayer(curTheme), 0, 0, W, HORIZON + 2); ctx.globalAlpha = 1;
 
-  // 먼 배경 (커브 방향으로 천천히 이동)
+  // 먼 배경 (커브 방향으로 천천히 이동) + 구름
   const baseIdx = Math.floor(camZ / SEG);
   bgOffset += curveAt(baseIdx) * disp.speed * dt * 900;
+  const clouds = cloudLayer();
+  let cx0 = -mod(now * 0.004 + bgOffset * 0.3, clouds.width);
+  for (; cx0 < W; cx0 += clouds.width) ctx.drawImage(clouds, cx0, 0);
   const drawBg = (th, alpha) => {
     const img = bgLayer(th);
     const bw = img.width;
-    let ox = -(((bgOffset % bw) + bw) % bw);
+    let ox = -mod(bgOffset, bw);
     ctx.globalAlpha = alpha;
     for (; ox < W; ox += bw) ctx.drawImage(img, ox, HORIZON - img.height + 2);
     ctx.globalAlpha = 1;
   };
   if (themeFade < 1) drawBg(prevTheme, 1 - themeFade);
   drawBg(curTheme, themeFade);
+  // 지평선 아지랑이 (먼 풍경이 대기에 묻히는 느낌)
+  const hz = ctx.createLinearGradient(0, HORIZON - H * 0.12, 0, HORIZON + 2);
+  hz.addColorStop(0, `rgba(${fogCol[0] | 0},${fogCol[1] | 0},${fogCol[2] | 0},0)`);
+  hz.addColorStop(1, `rgba(${fogCol[0] | 0},${fogCol[1] | 0},${fogCol[2] | 0},0.55)`);
+  ctx.fillStyle = hz; ctx.fillRect(0, HORIZON - H * 0.12, W, H * 0.12 + 2);
   // 지평선 아래 바닥색
   const groundFar = THEMES[themeAt(pos + DRAW * SEG)].ground[0];
-  ctx.fillStyle = rgb(mix(groundFar, fogCol, 0.6)); ctx.fillRect(0, HORIZON, W, H - HORIZON);
+  ctx.fillStyle = rgb(mix(groundFar, fogCol, 0.88)); ctx.fillRect(0, HORIZON, W, H - HORIZON);
 
   // 도로 투영 (가까운 곳 → 먼 곳, maxY로 언덕 뒤 가림)
   const basePct = (camZ - baseIdx * SEG) / SEG;
@@ -1152,15 +1572,19 @@ function render(dt, now) {
     s.visible = true;
 
     const th = THEMES[themeAt(z1)];
-    const fog = clamp(1 - Math.exp(-Math.pow(n / DRAW, 2) * 4), 0, 0.9);
-    const stripe = mod(Math.floor(idx / 2), 2);
+    const fog = segFog(n);
+    const stripe = mod(Math.floor(idx / 3), 2);
     const top = sy2, bot = Math.min(sy1, maxY) + 1;
+    const col = (c) => rgb(mix(c, fogCol, fog));
 
-    ctx.fillStyle = rgb(mix(th.ground[stripe], fogCol, fog));
+    ctx.fillStyle = col(th.ground[stripe]);
     ctx.fillRect(0, top, W, bot - top);
-    quad(rgb(mix(th.rumble[stripe], fogCol, fog)), sx1, sy1, w1 * 1.12, sx2, sy2, w2 * 1.12);
-    quad(rgb(mix(th.road[stripe], fogCol, fog)), sx1, sy1, w1, sx2, sy2, w2);
-    if (stripe && mod(idx, 4) < 2) quad(rgb(mix(th.lane, fogCol, fog)), sx1, sy1, w1 * 0.025, sx2, sy2, w2 * 0.025);
+    quad(col(th.verge[stripe]), sx1, sy1, w1 * 1.32, sx2, sy2, w2 * 1.32);
+    quad(col(th.road[stripe]), sx1, sy1, w1, sx2, sy2, w2);
+    const edge = col(th.edge);
+    quad(edge, sx1 - w1 * 0.93, sy1, w1 * 0.022, sx2 - w2 * 0.93, sy2, w2 * 0.022);
+    quad(edge, sx1 + w1 * 0.93, sy1, w1 * 0.022, sx2 + w2 * 0.93, sy2, w2 * 0.022);
+    if (mod(idx, 4) < 2) quad(col(th.lane), sx1, sy1, w1 * 0.016, sx2, sy2, w2 * 0.016);
     if (padIdx.has(idx)) {
       const on = Math.floor(performance.now() / 150) % 2 === mod(idx, 2);
       quad(on ? "#00e5ff" : "#0096c7", sx1, sy1, w1 * 0.55, sx2, sy2, w2 * 0.55);
@@ -1190,6 +1614,7 @@ function render(dt, now) {
     const idx = s.idx, m = s.m;
     const needClip = s.clip < s.sy;
     if (needClip) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, s.clip); ctx.clip(); }
+    ctx.globalAlpha = 1 - segFog(n) * 0.85;
     if (n >= 1 && m > 0.35) drawSprites(idx, s, m);
     const objs = bySeg.get(idx);
     if (objs) {
@@ -1208,6 +1633,7 @@ function render(dt, now) {
     if (ghost && idx === ghostIdx && ghost.distance_m > pos + 1.5) {
       drawRider(s.sx - 0.9 * m, s.sy, m, disp.angle * 0.97 + 1, GHOST);
     }
+    ctx.globalAlpha = 1;
     if (needClip) ctx.restore();
   }
 
@@ -1239,6 +1665,8 @@ function render(dt, now) {
     }
   }
 
+  ctx.drawImage(vignetteLayer(), 0, 0, W, H);
+
   // 속도선
   const intensity = Math.max(clamp((disp.speed - 26) / 16, 0, 1), fx.turbo || fx.pad || fx.star ? 0.9 : 0);
   if (dt > 0.1) speedLines.length = 0;
@@ -1264,7 +1692,7 @@ function render(dt, now) {
 function quad(color, x1, y1, w1, x2, y2, w2) {
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.moveTo(x1 - w1, y1); ctx.lineTo(x2 - w2, y2); ctx.lineTo(x2 + w2, y2); ctx.lineTo(x1 + w1, y1);
+  ctx.moveTo(x1 - w1, y1 + 1); ctx.lineTo(x2 - w2, y2); ctx.lineTo(x2 + w2, y2); ctx.lineTo(x1 + w1, y1 + 1);
   ctx.closePath(); ctx.fill();
 }
 
@@ -1274,8 +1702,8 @@ function drawSprites(idx, s, m) {
   const at = (off) => s.sx + side * (s.w + off * m);
   if (theme === "city") {
     if (idx % 8 === 0) { drawLamp(s.sx - s.w - 1.0 * m, s.sy, m); drawLamp(s.sx + s.w + 1.0 * m, s.sy, m); }
-    else if (h < 0.22) drawBuilding(at(7 + v * 6), s.sy, m, v);
-    else if (h < 0.3) drawTree(at(2.5), s.sy, m, v);
+    else if (h < 0.22) drawBuilding(at(10 + v * 8), s.sy, m, v);
+    else if (h < 0.3) drawTree(at(2.5), s.sy, m, v, TREE_TONES.city);
   } else if (theme === "suburb") {
     if (h < 0.2) drawTree(at(2 + v * 7), s.sy, m, v);
     else if (h < 0.25) drawHouse(at(9 + v * 4), s.sy, m, v);
@@ -1291,6 +1719,13 @@ function drawSprites(idx, s, m) {
 // =====================================================================
 // HUD
 // =====================================================================
+const RPM_ZONES = [
+  { max: 1, name: "휴식", color: "#8d97a5" },
+  { max: 50, name: "가볍게", color: "#5ab0ff" },
+  { max: 75, name: "리듬", color: "#3ddc84" },
+  { max: 95, name: "파워", color: "#ffc53d" },
+  { max: Infinity, name: "전력", color: "#ff5a5f" },
+];
 let hudTimer = 0;
 function updateHud(dt) {
   hudTimer -= dt;
@@ -1300,17 +1735,28 @@ function updateHud(dt) {
   $("hTime").textContent = fmtTime(S.elapsed_sec);
   $("hCal").textContent = Math.round(S.calories);
   $("hSpeed").textContent = disp.speed.toFixed(disp.speed < 10 ? 1 : 0);
+  $("hAvg").textContent = S.elapsed_sec > 1 ? (S.distance_m / S.elapsed_sec * 3.6).toFixed(1) : "0.0";
+  $("hMax").textContent = (S.max_speed || 0).toFixed(1);
   const rpm = Math.round(S.cadence_rpm);
+  const zone = RPM_ZONES.find((z) => rpm < z.max);
   $("hRpm").textContent = rpm;
-  $("hRpm").style.color = rpm === 0 ? "#cfd6df" : rpm < 50 ? "#8ecae6" : rpm < 75 ? "#80ed99" : rpm < 95 ? "#ffd166" : "#ff6b6b";
+  $("hRpm").style.color = rpm === 0 ? "" : zone.color;
+  $("rpmZone").textContent = zone.name;
+  $("rpmZone").style.color = rpm === 0 ? "" : zone.color;
+  $("hAvgRpm").textContent = Math.round(S.avg_rpm || 0);
+  const fill = $("rpmFill");
+  fill.setAttribute("stroke-dasharray", `${(197.9 * clamp(rpm / 130, 0, 1)).toFixed(1)} 263.9`);
+  fill.setAttribute("stroke", zone.color);
 
   const f = S.terrain_factor;
   const badge = $("terrainBadge");
+  const grade = Math.round(Math.abs(1 - f) * GRADE_K * 100);
   badge.classList.toggle("hidden", Math.abs(f - 1) < 0.05);
-  badge.textContent = f < 1 ? `⛰ 오르막 ${Math.round((1 - f) * GRADE_K * 100)}%` : `⬇ 내리막 ${Math.round((f - 1) * GRADE_K * 100)}%`;
+  badge.className = badge.className.replace(/ ?(up|down)/g, "") + (f < 1 ? " up" : " down");
+  badge.innerHTML = `<svg class="ico"><use href="#i-${f < 1 ? "up" : "down"}"/></svg>${f < 1 ? "오르막" : "내리막"} <span class="num">${grade}%</span>`;
 
   const sen = S.sensor || {};
-  $("sensorDot").textContent = sen.mock ? "🧪 Mock" : sen.connected ? "🟢 센서" : "🔴 센서";
+  $("sensorDot").innerHTML = `<span class="dot ${sen.mock ? "mock" : sen.connected ? "on" : "off"}"></span>${sen.mock ? "Mock" : "센서"}`;
   $("sensorWarn").classList.toggle("hidden", !!sen.connected);
   $("mockPanel").classList.toggle("hidden", !MOCK);
   $("mockVal").textContent = `목표 ${mockTarget}`;
@@ -1349,7 +1795,9 @@ function drawProfile(c, t, total, me, ghostD, others) {
   for (let i = 0; i <= n; i++) { lo = Math.min(lo, t.elev[i]); hi = Math.max(hi, t.elev[i]); }
   const span = Math.max(hi - lo, 20);
   const yOf = (e) => h - 4 - ((e - lo) / span) * (h - 12);
-  g.fillStyle = "rgba(46,196,182,0.35)"; g.strokeStyle = "#2ec4b6"; g.lineWidth = 2;
+  const fillG = g.createLinearGradient(0, 0, 0, h);
+  fillG.addColorStop(0, "rgba(255,106,43,0.45)"); fillG.addColorStop(1, "rgba(255,106,43,0.02)");
+  g.fillStyle = fillG; g.strokeStyle = "#ff8a57"; g.lineWidth = 1.5;
   g.beginPath(); g.moveTo(0, h);
   for (let px = 0; px <= w; px += 2) g.lineTo(px, yOf(t.elev[Math.min(n, Math.floor((px / w) * n))]));
   g.lineTo(w, h); g.closePath(); g.fill();
@@ -1362,7 +1810,7 @@ function drawProfile(c, t, total, me, ghostD, others) {
   };
   if (ghostD != null) dot(ghostD, "rgba(255,255,255,0.85)", 5);
   for (const o of others || []) dot(o.distance_m, o.color, 4);
-  if (me != null) dot(me, "#ff6b35", 6);
+  if (me != null) { dot(me, "#fff", 7); dot(me, "#ff6a2b", 5); }
 }
 let miniTimer = 0;
 function drawMinimap(stage, ghost) {
@@ -1423,7 +1871,7 @@ function updateArcadeHud() {
   $("hRank").textContent = a.rank;
   $("hRiders").textContent = a.riders_total;
 
-  const board = a.leaderboard.map((x, i) => `<div class="${x.is_player ? "me" : ""}">${i + 1}
+  const board = a.leaderboard.map((x, i) => `<div class="${x.is_player ? "me" : ""}"><span class="pos">${i + 1}</span>
       <i style="background:${x.color}"></i>${x.name}<span class="gap">${x.is_player ? "" : x.finished ? "🏁" : (x.gap_m > 0 ? "+" : "") + x.gap_m + "m"}</span></div>`).join("");
   if (board !== lastBoard) { $("board").innerHTML = board; lastBoard = board; }
 
@@ -1564,6 +2012,7 @@ function step(now, dt) {
     }
     audio.update(dt, disp.speed, disp.rpm, view === "game" && inSession);
   }
+  if (view !== "game") { ambientDist += 5 * dt; disp.angle += Math.PI * 2 * dt; }
 
   render(dt, now);
   updateHud(dt);
