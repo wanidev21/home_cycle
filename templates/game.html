@@ -161,7 +161,9 @@ tr:last-child td { border-bottom: 0; }
 .metrics small { display: block; font-size: 11px; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 2px; }
 .metrics b { font-size: 26px; font-weight: 700; line-height: 1.05; }
 .metrics i { font-style: normal; font-size: 13px; color: var(--muted); margin-left: 3px; }
-#sensorDot { position: absolute; top: max(16px, env(safe-area-inset-top)); right: 16px; }
+#topRight { position: absolute; top: max(16px, env(safe-area-inset-top)); right: 16px; display: flex; gap: 8px; }
+#btnCam { pointer-events: auto; cursor: pointer; }
+#btnCam .ico { font-size: 18px; }
 
 #stagebar {
   position: absolute; top: max(16px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
@@ -331,6 +333,7 @@ body.portrait-touch #rotateHint { display: flex; }
     <symbol id="i-stop" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.4-5.7L20 8.5"/><path d="M20 3.5v5h-5"/></symbol>
     <symbol id="i-ghost" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10a7 7 0 0 1 14 0v10l-2.5-2-2.3 2-2.2-2-2.2 2-2.3-2z"/><path d="M9.5 10.5h.01M14.5 10.5h.01" stroke-width="3"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5a1 1 0 0 1 1-1h3M20 7V5a1 1 0 0 0-1-1h-3M4 17v2a1 1 0 0 0 1 1h3M20 17v2a1 1 0 0 1-1 1h-3"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 10 10l4 4 7-8"/><path d="M16 6h5v5"/></symbol>
     <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l7 8 4-4 7 8"/><path d="M16 18h5v-5"/></symbol>
   </defs>
@@ -439,7 +442,7 @@ body.portrait-touch #rotateHint { display: flex; }
     <div id="effects"></div>
     <div id="dogPanel" class="hidden">🐕 개가 쫓아온다! <span id="dogText"></span><div id="dogBar"><div id="dogFill"></div></div></div>
   </div>
-  <div id="sensorDot" class="chip"></div>
+  <div id="topRight"><button id="btnCam" class="chip"><svg class="ico"><use href="#i-eye"/></svg><span id="camLabel">1인칭</span></button><div id="sensorDot" class="chip"></div></div>
   <div id="stagebar" class="panel hidden">
     <canvas id="minimap"></canvas>
     <div id="stageinfo"><span id="sName"></span><span id="sGhost"></span><span class="stars" id="sStars"></span></div>
@@ -795,6 +798,7 @@ function setMock(v) {
 window.addEventListener("keydown", (e) => {
   if (MOCK && e.key === "ArrowUp") { e.preventDefault(); setMock(mockTarget + 10); }
   else if (MOCK && e.key === "ArrowDown") { e.preventDefault(); setMock(mockTarget - 10); }
+  else if (e.key === "v" || e.key === "V") setCam(camMode === "fp" ? "tp" : "fp");
   else if ((e.key === "Enter" || e.key === "i") && S && S.arcade) { e.preventDefault(); send({ command: "use_item" }); }
   else if (e.key === " ") {
     e.preventDefault();
@@ -806,6 +810,7 @@ window.addEventListener("keydown", (e) => {
 });
 document.querySelectorAll("[data-mock]").forEach((b) =>
   b.addEventListener("click", (e) => { e.stopPropagation(); setMock(mockTarget + Number(b.dataset.mock)); }));
+$("btnCam").addEventListener("pointerdown", (e) => { e.stopPropagation(); setCam(camMode === "fp" ? "tp" : "fp"); });
 $("itemSlot").addEventListener("pointerdown", (e) => { e.stopPropagation(); userGesture(); send({ command: "use_item" }); });
 $("game").addEventListener("pointerdown", () => {
   if (view === "game" && S && S.state === "playing") { userGesture(); send({ command: "pause" }); }
@@ -1465,7 +1470,7 @@ function riderOpts(r) {
   };
 }
 
-const ME = { tire: "#1b1b1f", shorts: "#23263a", skin: "#e2b48c", shoe: "#f5f5f5", jersey: "#ff6b35", stripe: "#ffffff", helmet: "#f7f7f7", light: true };
+const ME = { tire: "#1b1b1f", shorts: "#23263a", skin: "#e2b48c", shoe: "#f5f5f5", jersey: "#ff6b35", stripe: "#ffffff", helmet: "#f7f7f7", light: true, frame: "#2b2f37", glove: "#4a515c" };
 const GHOST = { tire: "#d8f3ff", shorts: "#d8f3ff", skin: "#d8f3ff", shoe: "#ffffff", jersey: "#bfeaff", stripe: "#ffffff", helmet: "#ffffff", alpha: 0.5 };
 
 // =====================================================================
@@ -1473,8 +1478,19 @@ const GHOST = { tire: "#d8f3ff", shorts: "#d8f3ff", skin: "#d8f3ff", shoe: "#fff
 // =====================================================================
 const DRAW = 140;       // 그릴 세그먼트 수 (≈420m)
 const ROAD_W = 2.2;     // 도로 반폭(m)
-const CAM_H = 2.4;      // 카메라 높이(m)
-const CAM_BACK = 4.5;   // 카메라가 자전거 뒤로 떨어진 거리(m)
+// 카메라: "fp" 1인칭(핸들바 시점) / "tp" 뒤에서 보는 시점
+const CAMS = {
+  fp: { h: 1.55, back: 0.3 },
+  tp: { h: 2.4, back: 4.5 },
+};
+let camMode = "fp";
+try { camMode = localStorage.getItem("pq.cam") === "tp" ? "tp" : "fp"; } catch (e) { /* 저장소 없음 */ }
+function setCam(m) {
+  camMode = m;
+  try { localStorage.setItem("pq.cam", m); } catch (e) { /* 무시 */ }
+  $("camLabel").textContent = m === "fp" ? "1인칭" : "뒤에서";
+}
+const NUM_FONT = '"Bahnschrift","DIN Alternate","Roboto Condensed",system-ui,sans-serif';
 const segBuf = Array.from({ length: DRAW }, () => ({}));
 let bgOffset = 0;
 const speedLines = [];
@@ -1488,10 +1504,15 @@ function curveAt(idx) {
 let ambientDist = 0;   // 메뉴 화면 뒤 배경: 천천히 달리는 모습
 function render(dt, now) {
   const pos = view === "game" ? disp.dist : ambientDist;
-  const camZ = pos - CAM_BACK;
-  const bob = Math.sin(disp.angle * 2) * 0.015 * clamp(disp.speed / 20, 0, 1);
-  const camY = elevAt(pos) + CAM_H + bob;
+  const fp = view === "game" && camMode === "fp";   // 메뉴 배경은 항상 뒷모습
+  const cam = CAMS[fp ? "fp" : "tp"];
+  const camZ = pos - cam.back;
+  const bob = Math.sin(disp.angle * 2) * (fp ? 0.008 : 0.015) * clamp(disp.speed / 20, 0, 1);
+  const camY = elevAt(pos) + cam.h + bob;
   const theme = THEMES[curTheme];
+  const arcFx = S && S.arcade ? S.arcade.effects : {};
+  const roll = fp && arcFx.slip ? Math.sin(now / 60) * 0.12 : 0;   // 1인칭에서 미끄러지면 화면이 흔들림
+  if (roll) { ctx.save(); ctx.translate(W / 2, H * 0.7); ctx.rotate(roll); ctx.scale(1.15, 1.15); ctx.translate(-W / 2, -H * 0.7); }
 
   // 하늘 (테마 전환 시 크로스페이드)
   themeFade = Math.min(1, themeFade + dt / 1.8);
@@ -1638,23 +1659,26 @@ function render(dt, now) {
   }
 
   // 내 자전거
-  const riderScale = F / CAM_BACK;
+  const riderScale = F / cam.back;
   const riderY = HORIZON - riderScale * (elevAt(pos) - camY);
   const climbing = factorAt(pos) < 0.8 && disp.rpm > 0;
   const fx = arc ? arc.effects : {};
-  drawRider(W / 2, riderY, riderScale, disp.angle, {
+  if (fp) {
+    if (roll) ctx.restore();
+    drawCockpit(now, { ...ME, standing: climbing, rainbow: !!fx.star, bubble: !!fx.shield });
+  } else drawRider(W / 2, riderY, riderScale, disp.angle, {
     ...ME, standing: climbing,
     flame: !!(fx.turbo || fx.pad || fx.star), rainbow: !!fx.star, bubble: !!fx.shield,
     tilt: fx.slip ? Math.sin(now / 60) * 0.25 : 0, dizzy: !!fx.slip,
   });
-  // 내 옆·뒤 라이벌 (카메라와 나 사이)
+  // 내 옆·뒤 라이벌 (카메라와 나 사이) — 1인칭에선 안 보임
   behindMe.sort((a, b) => b.distance_m - a.distance_m);
-  for (const r of behindMe) {
+  if (!fp) for (const r of behindMe) {
     const z = r.distance_m - camZ, sc = F / z;
     drawRider(W / 2 + r.lane * ROAD_W * sc, HORIZON - sc * (elevAt(r.distance_m) - camY), sc, riderAngles[r.id] || 0, riderOpts(r));
   }
   // 쫓아오는 개
-  if (arc && arc.dog) {
+  if (arc && arc.dog && !fp) {
     // 카메라 시야 아래라 실제 위치로는 안 보이므로, 가까울수록 화면 아래에서 크게 솟아오르게
     const gap = Math.max(0, arc.dog.gap);
     if (gap < 14) {
@@ -1714,6 +1738,133 @@ function drawSprites(idx, s, m) {
     if (h < 0.12) drawPalm(at(2.5 + v * 5), s.sy, m, v);
     else if (h < 0.17) drawParasol(at(4 + v * 6), s.sy, m, v);
   }
+}
+
+// =====================================================================
+// 1인칭 시점: 핸들바 + 손 + 앞바퀴 + 페달 박자에 맞춰 올라오는 무릎
+// =====================================================================
+function drawCockpit(now, o) {
+  const u = Math.min(H, W * 0.62) / 100;          // 화면 크기 기준 단위
+  const climbing = o.standing;
+  const sway = Math.sin(disp.angle) * (climbing ? 1.4 : 0.5) * u;
+  const buzz = disp.speed > 3 ? Math.sin(now / 23) * Math.sin(now / 37) * clamp(disp.speed / 40, 0, 1) * 0.35 * u : 0;
+  const cx = W / 2 + sway, by = H + buzz;          // 기준점: 화면 아래 가운데
+  const tape = o.rainbow ? `hsl(${(now / 4) % 360},90%,55%)` : "#1a1c20";
+  ctx.save();
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+  // 앞바퀴 (타이어 무늬가 속도에 맞춰 흘러감)
+  const ty = by - 17 * u, tr = 4.2 * u;
+  ctx.fillStyle = "#16181b";
+  ctx.beginPath(); ctx.ellipse(cx, by + 6 * u, tr, 24 * u, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.save();
+  ctx.beginPath(); ctx.ellipse(cx, by + 6 * u, tr, 24 * u, 0, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  const tread = mod(disp.dist * 40, 3.2) * u;
+  for (let yy = ty - 4 * u + tread; yy < by; yy += 3.2 * u) ctx.fillRect(cx - tr * 0.6, yy, tr * 1.2, 0.8 * u);
+  ctx.fillStyle = "rgba(255,255,255,0.1)";
+  ctx.fillRect(cx - tr * 0.75, ty - 6 * u, tr * 0.25, 30 * u);   // 옆면 하이라이트
+  ctx.restore();
+
+  // 무릎: 크랭크 각도로 번갈아 올라옴 (실제 RPM과 같은 박자)
+  for (const side of [-1, 1]) {
+    const a = disp.angle + (side < 0 ? 0 : Math.PI);
+    const lift = (1 - Math.cos(a)) / 2;                    // 0(아래) ~ 1(위)
+    const ky = by + 10 * u - lift * 24 * u, kx = cx + side * (13 + lift * 2) * u;
+    ctx.fillStyle = o.skin;                                 // 무릎 (허벅지 끝)
+    ctx.beginPath(); ctx.ellipse(kx, ky + 1.5 * u, 6.2 * u, 3 * u, 0, Math.PI, 0);
+    ctx.lineTo(kx + 6.4 * u, ky + 4 * u); ctx.lineTo(kx - 6.4 * u, ky + 4 * u); ctx.fill();
+    ctx.fillStyle = o.shorts;                               // 허벅지 (반바지)
+    ctx.beginPath();
+    ctx.moveTo(kx - 6.6 * u, ky + 3.6 * u); ctx.lineTo(kx + 6.6 * u, ky + 3.6 * u);
+    ctx.lineTo(kx + side * 3 * u + 9 * u, by + 26 * u); ctx.lineTo(kx + side * 3 * u - 9 * u, by + 26 * u); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillRect(kx - side * 4.5 * u - 1 * u, ky + 4 * u, 2 * u, 20 * u);
+    ctx.fillStyle = "rgba(0,0,0,0.12)";
+    ctx.beginPath(); ctx.ellipse(kx + side * 2.5 * u, ky + 1.8 * u, 2.6 * u, 1.4 * u, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // 탑튜브 + 헤드튜브 + 스템
+  ctx.fillStyle = o.frame;
+  ctx.beginPath();
+  ctx.moveTo(cx - 2.2 * u, by - 27 * u); ctx.lineTo(cx + 2.2 * u, by - 27 * u);
+  ctx.lineTo(cx + 3.6 * u, by + 1 * u); ctx.lineTo(cx - 3.6 * u, by + 1 * u); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.12)";
+  ctx.fillRect(cx - 1.8 * u, by - 26 * u, 0.9 * u, 26 * u);
+  ctx.fillStyle = "#1d2025";
+  ctx.beginPath();
+  ctx.moveTo(cx - 2 * u, by - 34 * u); ctx.lineTo(cx + 2 * u, by - 34 * u);
+  ctx.lineTo(cx + 2.8 * u, by - 24 * u); ctx.lineTo(cx - 2.8 * u, by - 24 * u); ctx.fill();
+
+  // 핸들바: 탑 → 앞으로 휘어 후드(브레이크 레버)
+  const barY = by - 30 * u;
+  ctx.strokeStyle = tape; ctx.lineWidth = 2.4 * u;
+  ctx.beginPath();
+  ctx.moveTo(cx - 22 * u, barY - 3 * u);
+  ctx.quadraticCurveTo(cx - 20 * u, barY + 1.2 * u, cx - 12 * u, barY + 0.8 * u);
+  ctx.lineTo(cx + 12 * u, barY + 0.8 * u);
+  ctx.quadraticCurveTo(cx + 20 * u, barY + 1.2 * u, cx + 22 * u, barY - 3 * u);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.lineWidth = 0.6 * u;
+  ctx.beginPath(); ctx.moveTo(cx - 12 * u, barY); ctx.lineTo(cx + 12 * u, barY); ctx.stroke();
+  // 스템 클램프
+  ctx.fillStyle = "#2a2e35";
+  ctx.fillRect(cx - 2.6 * u, barY - 1.8 * u, 5.2 * u, 4.4 * u);
+
+  // 속도계 (스템 앞 마운트)
+  const gw = 13 * u, gh = 6.6 * u, gy = barY - 9.8 * u;
+  ctx.fillStyle = "#23272e"; ctx.fillRect(cx - 1 * u, gy + gh - 0.5 * u, 2 * u, 4 * u);
+  ctx.fillStyle = "#121418";
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(cx - gw / 2, gy, gw, gh, 1.2 * u) : ctx.rect(cx - gw / 2, gy, gw, gh); ctx.fill();
+  ctx.fillStyle = "#c9d6c4";
+  ctx.fillRect(cx - gw / 2 + 0.8 * u, gy + 0.8 * u, gw - 1.6 * u, gh - 1.6 * u);
+  ctx.fillStyle = "#1b2219"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `700 ${Math.round(3.3 * u)}px ${NUM_FONT}`;
+  ctx.fillText(disp.speed.toFixed(1), cx - 1.6 * u, gy + gh * 0.52);
+  ctx.font = `600 ${Math.round(1.25 * u)}px system-ui`;
+  ctx.fillText("km/h", cx + 4 * u, gy + gh * 0.72);
+
+  // 팔 (화면 아래 바깥에서 후드로) + 장갑
+  for (const s of [-1, 1]) {
+    const hx = cx + s * 21 * u, hy = barY - 2.2 * u;          // 손(후드 위)
+    const ex = cx + s * 33 * u, ey = by - 4 * u;               // 팔꿈치 (가까워서 크게)
+    const sx = cx + s * 44 * u, sy = by + 16 * u;              // 어깨 쪽 (화면 밖)
+    // 팔뚝: 팔꿈치 쪽이 굵고 손목 쪽이 가는 사다리꼴 (원근)
+    const nx = -(hy - ey), ny = hx - ex, nl = Math.hypot(nx, ny);
+    const px = nx / nl, py = ny / nl;
+    ctx.fillStyle = o.skin;
+    ctx.beginPath();
+    ctx.moveTo(ex + px * 6.5 * u, ey + py * 6.5 * u); ctx.lineTo(hx + px * 3 * u, hy + py * 3 * u);
+    ctx.lineTo(hx - px * 3 * u, hy - py * 3 * u); ctx.lineTo(ex - px * 6.5 * u, ey - py * 6.5 * u); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.13)";                        // 바깥쪽 그늘
+    const o2 = s > 0 ? 1 : -1;
+    ctx.beginPath();
+    ctx.moveTo(ex + px * 6.5 * u * o2, ey + py * 6.5 * u * o2); ctx.lineTo(hx + px * 3 * u * o2, hy + py * 3 * u * o2);
+    ctx.lineTo(hx + px * 1.2 * u * o2, hy + py * 1.2 * u * o2); ctx.lineTo(ex + px * 2.5 * u * o2, ey + py * 2.5 * u * o2); ctx.fill();
+    // 소매 (저지)
+    ctx.strokeStyle = o.jersey; ctx.lineWidth = 15 * u; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(lerp(sx, ex, 0.82), lerp(sy, ey, 0.82)); ctx.stroke();
+    ctx.strokeStyle = o.stripe; ctx.lineWidth = 15.2 * u; ctx.lineCap = "butt";
+    ctx.beginPath(); ctx.moveTo(lerp(sx, ex, 0.7), lerp(sy, ey, 0.7)); ctx.lineTo(lerp(sx, ex, 0.76), lerp(sy, ey, 0.76)); ctx.stroke();
+    ctx.lineCap = "round";
+    // 후드 + 장갑
+    ctx.fillStyle = "#15171a";
+    ctx.beginPath(); ctx.ellipse(hx + s * 0.4 * u, hy - 2.6 * u, 1.6 * u, 2.4 * u, s * 0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = o.glove;
+    ctx.beginPath(); ctx.ellipse(hx, hy + 0.4 * u, 4.2 * u, 3.8 * u, s * 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    for (const k of [-1, 0, 1]) { ctx.beginPath(); ctx.ellipse(hx + k * 1.4 * u - s * 0.8 * u, hy - 2.2 * u, 0.9 * u, 0.6 * u, 0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.14)";
+    ctx.beginPath(); ctx.ellipse(hx - s * 1.2 * u, hy - 0.8 * u, 2 * u, 1.1 * u, s * 0.35, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // 방어막: 화면 가장자리가 푸르게
+  if (o.bubble) {
+    const g = ctx.createRadialGradient(W / 2, H * 0.55, H * 0.35, W / 2, H * 0.55, W * 0.7);
+    g.addColorStop(0, "rgba(120,220,255,0)"); g.addColorStop(1, "rgba(120,220,255,0.35)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  ctx.restore();
 }
 
 // =====================================================================
@@ -2022,6 +2173,7 @@ const pageStart = performance.now();
 
 // 시작
 resize();
+setCam(camMode);
 track = buildFreeTrack();
 api("/api/achievements").then((list) => { achMeta = Object.fromEntries(list.map((a) => [a.id, a])); }).catch(() => {});
 connectWS();
