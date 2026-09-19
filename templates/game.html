@@ -38,7 +38,7 @@ html, body {
   user-select: none; -webkit-user-select: none; touch-action: manipulation;
   -webkit-font-smoothing: antialiased;
 }
-canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+canvas#game, canvas#game3d { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .hidden { display: none !important; }
 .num { font-family: var(--num); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .ico { width: 1em; height: 1em; display: inline-block; vertical-align: -0.14em; flex: none; }
@@ -339,6 +339,7 @@ body.portrait-touch #rotateHint { display: flex; }
   </defs>
 </svg>
 
+<canvas id="game3d" class="hidden"></canvas>
 <canvas id="game"></canvas>
 
 <!-- 메인 메뉴 -->
@@ -347,6 +348,7 @@ body.portrait-touch #rotateHint { display: flex; }
     <div class="topbar">
       <div class="brand"><div class="mark"><svg><use href="#i-bike"/></svg></div><b>PEDAL<span>QUEST</span></b></div>
       <div style="display:flex;gap:10px;align-items:center">
+        <button id="btnGfx" class="chip" title="그래픽 모드 (G)"><span id="gfxLabel">그래픽 2D</span></button>
         <button id="btnRescan" class="btn small hidden"><svg class="ico"><use href="#i-refresh"/></svg>센서 다시 찾기</button>
         <div class="chip"><span class="dot" id="menuDot"></span><span id="menuSensor">센서 확인 중…</span></div>
       </div>
@@ -442,7 +444,7 @@ body.portrait-touch #rotateHint { display: flex; }
     <div id="effects"></div>
     <div id="dogPanel" class="hidden">🐕 개가 쫓아온다! <span id="dogText"></span><div id="dogBar"><div id="dogFill"></div></div></div>
   </div>
-  <div id="topRight"><button id="btnCam" class="chip"><svg class="ico"><use href="#i-eye"/></svg><span id="camLabel">1인칭</span></button><div id="sensorDot" class="chip"></div></div>
+  <div id="topRight"><div id="fpsChip" class="chip hidden"></div><button id="btnCam" class="chip"><svg class="ico"><use href="#i-eye"/></svg><span id="camLabel">1인칭</span></button><div id="sensorDot" class="chip"></div></div>
   <div id="stagebar" class="panel hidden">
     <canvas id="minimap"></canvas>
     <div id="stageinfo"><span id="sName"></span><span id="sGhost"></span><span class="stars" id="sStars"></span></div>
@@ -799,6 +801,7 @@ window.addEventListener("keydown", (e) => {
   if (MOCK && e.key === "ArrowUp") { e.preventDefault(); setMock(mockTarget + 10); }
   else if (MOCK && e.key === "ArrowDown") { e.preventDefault(); setMock(mockTarget - 10); }
   else if (e.key === "v" || e.key === "V") setCam(camMode === "fp" ? "tp" : "fp");
+  else if (e.key === "g" || e.key === "G") setGfx(!(window.R3D && R3D.on));
   else if ((e.key === "Enter" || e.key === "i") && S && S.arcade) { e.preventDefault(); send({ command: "use_item" }); }
   else if (e.key === " ") {
     e.preventDefault();
@@ -942,6 +945,7 @@ function resize() {
   HORIZON = H * 0.46;
   F = H * 0.9;
   for (const k in bgCache) delete bgCache[k];
+  if (window.R3D && R3D.on) R3D.resize();
   checkOrientation();
 }
 addEventListener("resize", resize);
@@ -1005,14 +1009,13 @@ function vignetteLayer() {
 }
 
 // 먼 배경: 여러 겹을 멀수록 옅게 (대기 원근)
-function bgLayer(theme) {
-  if (bgCache[theme]) return bgCache[theme];
+function bgLayer(theme, haze = THEMES[theme].skyBot, key = theme) {  // haze/key: 3D 렌더러가 다른 하늘색으로 쓸 때
+  if (bgCache[key]) return bgCache[key];
   const bw = Math.max(400, Math.round(W * 2)), bh = Math.max(100, Math.round(H * 0.3));
   const c = document.createElement("canvas");
   c.width = bw; c.height = bh;
   const g = c.getContext("2d");
   const wave = (x, k, p) => Math.sin((x / bw) * Math.PI * 2 * k + p); // bw 주기로 이어지게
-  const haze = THEMES[theme].skyBot;
   const tint = (col, a) => rgb(mix(col, haze, a));
   const ridge = (col, base, amp, parts, sharp) => {
     const pts = [];
@@ -1078,7 +1081,7 @@ function bgLayer(theme) {
       g.fillRect(hash(i) * bw, yy, 6 + hash3(i) * 26 * (yy / bh), 1.2);
     }
   }
-  bgCache[theme] = c;
+  bgCache[key] = c;
   return c;
 }
 
@@ -1490,6 +1493,27 @@ function setCam(m) {
   try { localStorage.setItem("pq.cam", m); } catch (e) { /* 무시 */ }
   $("camLabel").textContent = m === "fp" ? "1인칭" : "뒤에서";
 }
+// 그래픽 모드: 2D(기본) / 3D(베타, Three.js). 3D는 처음 켤 때 모듈을 불러온다
+async function setGfx(on) {
+  try { localStorage.setItem("pq.gfx", on ? "3d" : "2d"); } catch (e) { /* 무시 */ }
+  if (on && !window.R3D) {
+    try {
+      $("gfxLabel").textContent = "3D 불러오는 중…";
+      await import("/static/render3d.js");
+      R3D.init($("game3d"));
+    } catch (e) {
+      console.error(e);
+      toast("3D를 켤 수 없어요 — 2D로 계속합니다");
+      on = false;
+      window.R3D = null;
+    }
+  }
+  if (window.R3D) R3D.on = on;
+  $("game3d").classList.toggle("hidden", !on);
+  if (on) R3D.resize();
+  $("gfxLabel").textContent = on ? "그래픽 3D (베타)" : "그래픽 2D";
+}
+$("btnGfx").addEventListener("click", () => setGfx(!(window.R3D && R3D.on)));
 const NUM_FONT = '"Bahnschrift","DIN Alternate","Roboto Condensed",system-ui,sans-serif';
 const segBuf = Array.from({ length: DRAW }, () => ({}));
 let bgOffset = 0;
@@ -1689,6 +1713,11 @@ function render(dt, now) {
     }
   }
 
+  drawPost(dt, fx);
+}
+
+// 화면 마무리: 비네팅 + 고속 속도선 (2D/3D 공용)
+function drawPost(dt, fx) {
   ctx.drawImage(vignetteLayer(), 0, 0, W, H);
 
   // 속도선
@@ -2137,6 +2166,7 @@ const audio = {
 // 메인 루프
 // =====================================================================
 let lastFrame = performance.now();
+let fpsFrames = 0, fpsAt = performance.now();
 let frameErrors = 0;
 function frame(now) {
   requestAnimationFrame(frame); // 한 프레임에서 오류가 나도 루프는 계속
@@ -2165,7 +2195,15 @@ function step(now, dt) {
   }
   if (view !== "game") { ambientDist += 5 * dt; disp.angle += Math.PI * 2 * dt; }
 
-  render(dt, now);
+  if (window.R3D && R3D.on) R3D.render(dt, now); else render(dt, now);
+  // FPS (3D일 때만 표시: 태블릿 성능 확인용)
+  fpsFrames++;
+  if (now - fpsAt > 1000) {
+    const on3d = !!(window.R3D && R3D.on);
+    $("fpsChip").classList.toggle("hidden", !on3d);
+    if (on3d) $("fpsChip").textContent = `3D · ${Math.round(fpsFrames * 1000 / (now - fpsAt))} fps`;
+    fpsFrames = 0; fpsAt = now;
+  }
   updateHud(dt);
   $("connBanner").classList.toggle("hidden", now - (lastMsgAt || pageStart) < 2500);
 }
@@ -2174,6 +2212,7 @@ const pageStart = performance.now();
 // 시작
 resize();
 setCam(camMode);
+try { if (localStorage.getItem("pq.gfx") === "3d") setGfx(true); } catch (e) { /* 저장소 없음 */ }
 track = buildFreeTrack();
 api("/api/achievements").then((list) => { achMeta = Object.fromEntries(list.map((a) => [a.id, a])); }).catch(() => {});
 connectWS();
