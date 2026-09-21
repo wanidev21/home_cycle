@@ -25,7 +25,11 @@ for (const [key, url] of Object.entries(COCKPIT_SPRITES)) {
 }
 // naturalWidth는 로드가 끝나야 0이 아니다 → 이 한 줄이 "쓸 수 있나"의 전부
 const usable = (img) => !!(img && !img.missing && img.naturalWidth);
-const SHOW_KNEES = true;
+// 지금 무릎 그림은 1인칭에 쓸 수 없다 — 시점이 다르다.
+// 그림은 "정면에서 마주 본 다리"(반바지 위, 무릎 아래)인데, 1인칭에서는 눈에 가까운
+// 엉덩이가 화면 아래, 앞으로 뻗은 무릎이 화면 위에 와야 한다. 그대로 얹으면
+// 하반신만 180도 돌아간 사람이 된다. 위에서 내려다본 그림이 오면 켠다.
+const SHOW_KNEES = false;
 // 무릎 스프라이트 배치. 그림 속 무릎은 가로 63% / 세로 70% 지점에 있다.
 const KNEE_WIDTH = 0.44;        // 화면 폭 대비
 const KNEE_AT_X = 0.15;         // 화면 가운데에서 좌우로 이만큼
