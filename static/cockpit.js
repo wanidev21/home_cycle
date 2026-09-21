@@ -43,9 +43,54 @@ const ARMS_WIDTH = 0.74;     // 화면 폭 대비
 const BAR_AT_Y = 0.70;       // 핸들바가 놓일 화면 높이 (0=위, 1=아래)
 const BAR_IN_SPRITE = 0.54;
 
+// ============================================================
+// 콕핏 모션
+// 세 가지가 겹친다: 일어서서 밟을 때의 좌우 기울기, 제동 시 앞으로 쏠림,
+// 페달마다의 상하 바운스. 값은 전부 프레임 간에 보간해서 뚝뚝 끊기지 않게 한다.
+// 보간 계수를 dt로 계산하므로 30fps든 144fps든 같은 속도로 움직인다.
+// ============================================================
+const TILT_MAX = 0.085;        // rad. 댄싱 시 좌우 기울기 (약 5도)
+const BRAKE_RISE = 0.028;      // 화면 높이 대비. 급제동 시 바가 올라오는 양
+const BRAKE_FULL = 28;         // km/h/s. 이 정도 감속이면 최대치
+const BOUNCE_MAX = 0.016;      // 화면 높이 대비. 페달 바운스
+const CALM_SPEED = 42;         // km/h. 빠를수록 바운스가 잦아든다
+
+let mTilt = 0, mBrake = 0, mBounce = 0;
+let mPrevSpeed = 0, mPrevNow = 0;
+
+// dt를 반영한 보간. rate가 클수록 목표에 빨리 붙는다.
+const ease = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
+
+// 제동 쏠림 + 페달 바운스를 합친 세로 이동량(px)
+function motionY() {
+  return -mBrake * H * BRAKE_RISE + Math.sin(disp.angle * 2) * mBounce * H * BOUNCE_MAX;
+}
+
+function updateCockpitMotion(now, standing) {
+  // 음수 dt를 막는다. exp(-rate * 음수)는 1보다 커져서 보간이 발산한다 (실제로 터뜨려 봤다).
+  const dt = mPrevNow ? clamp((now - mPrevNow) / 1000, 0, 0.1) : 1 / 60;
+  mPrevNow = now;
+
+  // 1) 댄싱: 크랭크 박자에 맞춰 자전거가 좌우로 흔들린다.
+  //    위상은 크랭크를 그대로 따라가고(박자가 어긋나면 안 된다), 세기만 보간한다.
+  mTilt = ease(mTilt, standing ? 1 : 0, 3.5, dt);
+
+  // 2) 제동: 속도가 급히 줄면 몸이 앞으로 쏠려 바가 가까워진다(= 화면에서 올라온다).
+  //    붙을 때는 빠르게, 풀릴 때는 천천히.
+  const decel = dt > 0 ? (mPrevSpeed - disp.speed) / dt : 0;
+  mPrevSpeed = disp.speed;
+  const brakeTarget = clamp(decel / BRAKE_FULL, 0, 1);
+  mBrake = ease(mBrake, brakeTarget, brakeTarget > mBrake ? 14 : 2.5, dt);
+
+  // 3) 바운스: 한 바퀴에 두 번(양발). 느릴수록·밟을수록 크고, 빠를수록 잦아든다.
+  const effort = disp.rpm > 0 ? clamp(1 - disp.speed / CALM_SPEED, 0.2, 1) : 0;
+  mBounce = ease(mBounce, effort, 6, dt);
+}
+
 function drawCockpit(now, o) {
   const u = Math.min(H, W * 0.62) / 100;
   const climbing = o.standing;
+  updateCockpitMotion(now, climbing);
   const sway = Math.sin(disp.angle) * (climbing ? 1.4 : 0.5) * u;
   const buzz = disp.speed > 3
     ? Math.sin(now / 23) * Math.sin(now / 37) * clamp(disp.speed / 40, 0, 1) * 0.35 * u
@@ -231,6 +276,13 @@ function drawCockpit(now, o) {
   // ================================================================
   // 화면 높이로 맞추면 팔이 화면을 다 덮는다. 폭으로 맞추고, 그림 속 핸들바가
   // 화면의 BAR_AT_Y 높이에 오도록 세로 위치를 역산했다 (위에서 계산).
+  //
+  // 여기서부터 속도계까지는 같은 변형을 받는다 — 속도계는 스템에 달려 있으므로
+  // 핸들바와 따로 놀면 안 된다. 무릎은 제외한다 (자전거가 기울어도 몸은 덜 기운다).
+  ctx.save();
+  ctx.translate(W / 2, H);                  // 회전축: 화면 아래 가운데 (자전거가 흔들리는 축)
+  ctx.rotate(Math.sin(disp.angle) * TILT_MAX * mTilt);
+  ctx.translate(-W / 2, -H + motionY());
   if (armsOk) ctx.drawImage(arms, ax, ay, aw, ah);
 
   // ================================================================
@@ -259,6 +311,8 @@ function drawCockpit(now, o) {
   ctx.lineTo(gx + gw / 2 - 3 * u, gy + gh * 0.42);
   ctx.lineTo(gx - gw / 2 + 1.1 * u, gy + gh * 0.42);
   ctx.closePath(); ctx.fill();
+
+  ctx.restore();   // 핸들바 변형 끝
 
   // ================================================================
   // 4) 방어막 (아케이드)
