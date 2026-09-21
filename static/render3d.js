@@ -6,7 +6,19 @@ import * as THREE from "./vendor/three.module.min.js";
 
 THREE.ColorManagement.enabled = false;   // 색 값을 2D와 똑같이 (sRGB 그대로)
 
-const N = 170;           // 그릴 도로 세그먼트 수 (≈510m)
+const N = 170;           // 버퍼가 감당하는 최대 도로 세그먼트 수 (≈510m)
+const N_MIN = 80;        // 저사양에서 줄일 수 있는 하한 (≈240m)
+const FOG_NEAR = 40;
+const FOG_SPAN = 0.92;   // 안개 끝 = 그리는 거리 × 이 비율 (끊긴 데가 안 보이게)
+// 태블릿(PowerVR GE8320)마다 성능이 달라 미리 정할 수 없다 → 실제 프레임 시간을 보고 조절한다.
+const FPS_TARGET_LOW = 27, FPS_TARGET_HIGH = 45;
+const PIXEL_STEPS = [0.9, 0.75, 0.62, 0.5];
+// 터치 기기는 보수적으로 시작해서 여유가 있으면 올라간다 (첫 몇 초가 버벅이지 않게)
+const COARSE = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+let drawN = COARSE ? 120 : N;   // 지금 그리는 세그먼트 수
+let pixelStep = COARSE ? 1 : 0; // PIXEL_STEPS 인덱스 (터치 기기)
+let frameMs = 16.7;      // 지수 이동평균
+let qualityAt = 0;       // 마지막으로 품질을 바꾼 시각
 const RW = 2.2;          // 도로 반폭(m) — game.html ROAD_W와 같음
 const FOV = 58;          // 2D 투영(F = 0.9H)과 같은 화각
 const PITCH = Math.atan(0.0444);   // 살짝 내려다봄 → 지평선이 화면 46% 높이 (2D와 같음)
@@ -231,8 +243,9 @@ function init(canvas) {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   scene = new THREE.Scene();
-  fog = new THREE.Fog(0xd4ecf6, 40, 470);
+  fog = new THREE.Fog(0xd4ecf6, FOG_NEAR, 470);
   scene.fog = fog;
+  setFog();
   camera = new THREE.PerspectiveCamera(FOV, 1, 0.08, 700);
   camera.rotation.order = "YXZ";
   scene.add(camera);
@@ -292,9 +305,9 @@ function init(canvas) {
 
 function resize() {
   if (!renderer) return;
-  const coarse = matchMedia("(pointer: coarse)").matches;
+  const coarse = COARSE;
   // 저사양 태블릿(PowerVR GE8320) 대비: 터치 기기는 0.75배 해상도로 그리고 늘림
-  renderer.setPixelRatio(coarse ? 0.75 : Math.min(window.devicePixelRatio || 1, 1.25));
+  renderer.setPixelRatio(coarse ? PIXEL_STEPS[pixelStep] : Math.min(window.devicePixelRatio || 1, 1.25));
   renderer.setSize(W, H, false);
   camera.aspect = W / H;
   camera.updateProjectionMatrix();
@@ -363,7 +376,34 @@ function emptyQuad() { tPos.fill(0, qi * 18, qi * 18 + 18); qi++; }
 const rgbCache = {};
 const c01 = (hex) => rgbCache[hex] || (rgbCache[hex] = hexRgb(hex).map((v) => v / 255));
 
+function adaptQuality(dt, now) {
+  // 탭이 백그라운드거나 화면이 꺼져 있으면 rAF가 1초에 한 번만 온다. 그 프레임을
+  // 성능으로 착각하면 돌아왔을 때 품질이 바닥으로 내려가 있다 → 아예 표본에서 뺀다.
+  if (dt > 0.2) { qualityAt = now; return; }
+  frameMs += (dt * 1000 - frameMs) * 0.08;
+  if (now - qualityAt < 1200) return;
+  const fps = 1000 / frameMs;
+  const coarse = COARSE;
+  if (fps < FPS_TARGET_LOW) {
+    if (drawN > N_MIN) { drawN = Math.max(N_MIN, drawN - 15); setFog(); }
+    else if (coarse && pixelStep < PIXEL_STEPS.length - 1) { pixelStep++; resize(); }
+    else return;
+    qualityAt = now;
+  } else if (fps > FPS_TARGET_HIGH) {
+    if (coarse && pixelStep > 0) { pixelStep--; resize(); }
+    else if (drawN < N) { drawN = Math.min(N, drawN + 10); setFog(); }
+    else return;
+    qualityAt = now;
+  }
+}
+
+function setFog() {
+  fog.near = FOG_NEAR;
+  fog.far = Math.max(120, drawN * SEG * FOG_SPAN);
+}
+
 function render(dt, now) {
+  adaptQuality(dt, now);
   const pos = view === "game" ? disp.dist : ambientDist;
   const fp = view === "game" && camMode === "fp";
   const cam = CAMS[fp ? "fp" : "tp"];
@@ -396,7 +436,7 @@ function render(dt, now) {
   const e0 = elevAt(pos);
   const basePct = (camZ - baseIdx * SEG) / SEG;
   let x = 0, dx = -curveAt(baseIdx) * basePct;
-  for (let n = 0; n <= N; n++) {
+  for (let n = 0; n <= drawN; n++) {
     const d = (baseIdx + n) * SEG;
     xs[n] = x; ys[n] = elevAt(d) - e0; zs[n] = -(d - camZ);
     x += dx; dx += curveAt(baseIdx + n);
@@ -406,7 +446,7 @@ function render(dt, now) {
   qi = 0;
   const padIdx = new Set();
   if (arc) for (const o of arc.objects) if (o.t === "pad") { const k = Math.floor(o.d / SEG); padIdx.add(k); padIdx.add(k + 1); }
-  for (let n = N - 1; n >= 0; n--) {
+  for (let n = drawN - 1; n >= 0; n--) {
     const idx = baseIdx + n;
     const t = T3[paletteKey(themeAt(idx * SEG))];
     const st = mod(Math.floor(idx / 3), 2);
@@ -420,6 +460,9 @@ function render(dt, now) {
     if (mod(idx, 4) < 2) Q(-RW * 0.016, RW * 0.016, c01(t.lane)); else emptyQuad();
     if (padIdx.has(idx)) Q(-RW * 0.55, RW * 0.55, Math.floor(now / 150) % 2 === mod(idx, 2) ? c01("#00e5ff") : c01("#0096c7")); else emptyQuad();
   }
+  terrain.geometry.setDrawRange(0, qi * 6);           // 줄어든 세그먼트는 아예 안 보냄
+  terrain.geometry.attributes.position.updateRanges = [{ start: 0, count: qi * 6 * 3 }];
+  terrain.geometry.attributes.color.updateRanges = [{ start: 0, count: qi * 6 * 3 }];
   terrain.geometry.attributes.position.needsUpdate = true;
   terrain.geometry.attributes.color.needsUpdate = true;
 
@@ -428,7 +471,7 @@ function render(dt, now) {
   finishMesh.visible = false;
   if (fin) {
     const n = (fin - baseIdx * SEG) / SEG;
-    if (n > 0 && n < N) {
+    if (n > 0 && n < drawN) {
       const i = Math.floor(n), t = n - i;
       finishMesh.position.set(lerp(xs[i], xs[i + 1], t), lerp(ys[i], ys[i + 1], t) + 0.01, lerp(zs[i], zs[i + 1], t));
       finishMesh.visible = true;
@@ -461,7 +504,7 @@ function placeScenery() {
     if (color) { col.set(color); m.setColorAt(cnt[name], col); }
     cnt[name]++;
   };
-  for (let n = 1; n < N; n++) {
+  for (let n = 1; n < drawN; n++) {
     const idx = baseIdx + n;
     const theme = themeAt(idx * SEG);
     const h = hash(idx), v = hash3(idx), side = hash2(idx) < 0.5 ? -1 : 1;
@@ -551,4 +594,4 @@ function drawOverlay(dt, now, fp, cam, fx) {
   drawPost(dt, fx);
 }
 
-window.R3D = { init, render, resize, on: false };
+window.R3D = { init, render, resize, on: false, quality: () => ({ drawN, pixelStep, fps: Math.round(1000 / frameMs) }) };

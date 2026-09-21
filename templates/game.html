@@ -2207,7 +2207,12 @@ function step(now, dt) {
   if (now - fpsAt > 1000) {
     const on3d = !!(window.R3D && R3D.on);
     $("fpsChip").classList.toggle("hidden", !on3d);
-    if (on3d) $("fpsChip").textContent = `3D · ${Math.round(fpsFrames * 1000 / (now - fpsAt))} fps`;
+    if (on3d) {
+      // 품질이 어디로 맞춰졌는지 같이 보여준다 (태블릿에서 확인용)
+      const q = R3D.quality ? R3D.quality() : null;
+      $("fpsChip").textContent = `3D · ${Math.round(fpsFrames * 1000 / (now - fpsAt))} fps`
+        + (q ? ` · ${Math.round(q.drawN * 3)}m` : "");
+    }
     fpsFrames = 0; fpsAt = now;
   }
   updateHud(dt);
