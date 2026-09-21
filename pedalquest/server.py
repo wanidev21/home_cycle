@@ -58,7 +58,22 @@ def create_app(config, game, sensor, records, mock: bool = False) -> FastAPI:
         task.cancel()
 
     app = FastAPI(lifespan=lifespan)
-    app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
+
+    class RevalidatingStatic(StaticFiles):
+        """브라우저가 예전 파일을 계속 쓰지 않게 매번 서버에 확인시킨다.
+
+        game.html은 render3d.js를 동적 import로 불러오는데, 크롬이 이 모듈을 강하게
+        캐시해서 코드를 고쳐도 태블릿에는 예전 버전이 그대로 뜬다 ("고쳤는데 안 바뀌네").
+        no-cache는 다운로드를 막는 게 아니라 "바뀌었는지 물어보고 안 바뀌었으면 304"라서
+        같은 와이파이에서는 비용이 사실상 없다.
+        """
+
+        async def get_response(self, path, scope):
+            resp = await super().get_response(path, scope)
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+    app.mount("/static", RevalidatingStatic(directory=ROOT / "static"), name="static")
     templates = Jinja2Templates(directory=ROOT / "templates")
 
     def handle_command(msg: dict):

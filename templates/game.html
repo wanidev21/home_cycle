@@ -1890,9 +1890,11 @@ function drawSprites(idx, s, m) {
 // =====================================================================
 // 1인칭 시점: 핸들바 + 손 + 앞바퀴 + 페달 박자에 맞춰 올라오는 무릎
 // =====================================================================
+let gripT = 0;        // 0 = 후드 그립, 1 = 바 탑 그립 (오르막). 급변하면 손이 튀어서 서서히 옮긴다
 function drawCockpit(now, o) {
   const u = Math.min(H, W * 0.62) / 100;          // 화면 크기 기준 단위
   const climbing = o.standing;
+  gripT += ((climbing ? 1 : 0) - gripT) * 0.06;
   const sway = Math.sin(disp.angle) * (climbing ? 1.4 : 0.5) * u;
   const buzz = disp.speed > 3 ? Math.sin(now / 23) * Math.sin(now / 37) * clamp(disp.speed / 40, 0, 1) * 0.35 * u : 0;
   const cx = W / 2 + sway, by = H + buzz;          // 기준점: 화면 아래 가운데
@@ -1973,8 +1975,11 @@ function drawCockpit(now, o) {
 
   // 팔 (화면 아래 바깥에서 후드로) + 장갑
   for (const s of [-1, 1]) {
-    const hx = cx + s * 21 * u, hy = barY - 2.2 * u;          // 손(후드 위)
-    const ex = cx + s * 33 * u, ey = by - 4 * u;               // 팔꿈치 (가까워서 크게)
+    // 오르막에서는 후드(바깥·앞)에서 바 탑(안쪽)으로 손을 옮긴다 — 실제로 언덕에선 탑을 잡는다
+    const hx = cx + s * lerp(21, 13.5, gripT) * u, hy = barY - lerp(2.2, 0.6, gripT) * u;
+    // 페달 박자에 맞춰 팔꿈치가 미세하게 벌어졌다 모인다 (좌우 반대 위상)
+    const tense = Math.sin(disp.angle + (s < 0 ? 0 : Math.PI)) * clamp(disp.rpm / 100, 0, 1);
+    const ex = cx + s * (33 + tense * 0.9) * u, ey = by - (4 + tense * 0.5) * u;   // 팔꿈치 (가까워서 크게)
     const sx = cx + s * 44 * u, sy = by + 16 * u;              // 어깨 쪽 (화면 밖)
     // 팔뚝: 팔꿈치 쪽이 굵고 손목 쪽이 가는 사다리꼴 (원근)
     const nx = -(hy - ey), ny = hx - ex, nl = Math.hypot(nx, ny);
@@ -1999,8 +2004,9 @@ function drawCockpit(now, o) {
     ctx.beginPath(); ctx.ellipse(hx + s * 0.4 * u, hy - 2.6 * u, 1.6 * u, 2.4 * u, s * 0.2, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = o.glove;
     ctx.beginPath(); ctx.ellipse(hx, hy + 0.4 * u, 4.2 * u, 3.8 * u, s * 0.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "rgba(0,0,0,0.25)";
-    for (const k of [-1, 0, 1]) { ctx.beginPath(); ctx.ellipse(hx + k * 1.4 * u - s * 0.8 * u, hy - 2.2 * u, 0.9 * u, 0.6 * u, 0, 0, Math.PI * 2); ctx.fill(); }
+    const grip = clamp((disp.speed - 18) / 22, 0, 1);         // 빠를수록 세게 쥔다
+    ctx.fillStyle = `rgba(${230 * grip | 0},${232 * grip | 0},${238 * grip | 0},${0.25 + 0.3 * grip})`;
+    for (const k of [-1, 0, 1]) { ctx.beginPath(); ctx.ellipse(hx + k * 1.4 * u - s * 0.8 * u, hy - 2.2 * u, 0.9 * u, 0.6 * u + 0.15 * grip * u, 0, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = "rgba(255,255,255,0.14)";
     ctx.beginPath(); ctx.ellipse(hx - s * 1.2 * u, hy - 0.8 * u, 2 * u, 1.1 * u, s * 0.35, 0, Math.PI * 2); ctx.fill();
   }

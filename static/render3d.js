@@ -51,6 +51,7 @@ const hexRgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16),
 for (const t of Object.values(T3)) t.fog = hexRgb(t.sky[2]);
 
 let renderer, scene, camera, fog, hemi, sun, cockpit, gauge, gaugeCtx, gaugeTex;
+let hands = [];
 let terrain, tPos, tCol, finishMesh;
 let bgCanvas, bgCtx, bgTex, bgKey = "";
 const inst = {};
@@ -178,7 +179,8 @@ function addInstanced(name, geo, mat, cap) {
 
 // ---------------------------------------------------------------------
 // 1인칭 콕핏 (카메라 자식 → 화면에 고정). 기하도형으로 만든 저폴리 모델
-// 몸(손·무릎)은 넣지 않음: 도형으로 만든 몸은 부자연스러움. 페달 박자는 카메라 흔들림으로 표현
+// 몸통·다리는 넣지 않는다 (도형으로 만든 몸은 부자연스러움 — 페달 박자는 카메라 흔들림으로 표현).
+// 후드를 잡은 손·팔뚝만 넣는다: 핸들바만 떠 있으면 내 몸이 없는 것처럼 보인다.
 // ---------------------------------------------------------------------
 function buildCockpit() {
   const g = new THREE.Group();
@@ -219,8 +221,49 @@ function buildCockpit() {
   gaugeTex = new THREE.CanvasTexture(gauge);
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.072), new THREE.MeshBasicMaterial({ map: gaugeTex }));
   screen.position.set(0, 0.0262, -0.085); screen.rotation.x = -Math.PI / 2 + 0.45; g.add(screen);
+  // 손: 후드를 감싼 장갑 + 몸 쪽으로 빠지며 화면 밖으로 나가는 팔뚝
+  const glove = new THREE.MeshLambertMaterial({ color: 0x565d69, flatShading: true });   // 2D 장갑색(#4a515c)과 같은 계열
+  const knuck = new THREE.MeshLambertMaterial({ color: 0x6d7583, flatShading: true });
+  hands = [];
+  for (const s of [-1, 1]) {
+    const h = new THREE.Group();
+    // 후드를 잡은 장갑만 넣고 팔뚝은 넣지 않는다.
+    // 팔을 원기둥으로 이으면 카메라에 가까운 쪽이 굵어져 기둥처럼 보이고 드롭을 가린다.
+    // 실제 1인칭 시야에서도 팔뚝은 화면 아래로 빠져 거의 보이지 않는다.
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.026, 0.078), glove);
+    back.position.set(s * 0.212, 0.03, -0.072);
+    back.rotation.x = -0.35;                        // 후드 기울기를 따라 감싼다
+    back.rotation.z = s * 0.12;
+    h.add(back);
+    for (let k = 0; k < 3; k++) {                   // 손등 너클
+      const kn = new THREE.Mesh(new THREE.SphereGeometry(0.0115, 6, 5), knuck);
+      kn.position.set(s * 0.212 + (k - 1) * 0.016, 0.042, -0.101 + k * 0.002);
+      kn.scale.set(1, 0.8, 1.2);
+      h.add(kn);
+    }
+    const thumb = new THREE.Mesh(new THREE.SphereGeometry(0.0125, 6, 5), glove);
+    thumb.scale.set(1.1, 0.85, 1.7);
+    thumb.position.set(s * 0.19, 0.024, -0.086);    // 안쪽으로 감은 엄지
+    h.add(thumb);
+    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.021, 0.035, 7), glove);
+    wrist.position.set(s * 0.211, 0.022, -0.036);   // 손목 끝 — 여기서 화면 밖으로 사라진다
+    wrist.rotation.x = Math.PI / 2 - 0.3;
+    h.add(wrist);
+    g.add(h);
+    hands.push(h);
+  }
   g.position.set(0, -0.17, -0.6);
   return g;
+}
+
+// 페달 박자에 맞춘 미세 그립 (좌우 반대 위상). 몸 전체를 움직이지 않고 손만 눌렀다 놨다 한다.
+function updateHands() {
+  for (let i = 0; i < hands.length; i++) {
+    const phase = disp.angle + i * Math.PI;
+    const push = clamp(disp.rpm / 110, 0, 1);
+    hands[i].position.y = Math.sin(phase) * 0.003 * push;
+    hands[i].position.x = Math.cos(phase) * 0.0016 * push;
+  }
 }
 let gaugeTimer = 0;
 function updateGauge(dt) {
@@ -484,6 +527,7 @@ function render(dt, now) {
   // 콕핏
   cockpit.visible = fp;
   if (fp) {
+    updateHands();
     updateGauge(dt);
   }
 
