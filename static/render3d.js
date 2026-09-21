@@ -400,6 +400,7 @@ function adaptQuality(dt, now) {
 function setFog() {
   fog.near = FOG_NEAR;
   fog.far = Math.max(120, drawN * SEG * FOG_SPAN);
+  if (window.R3D) window.R3D.drawDist = drawN * SEG;
 }
 
 function render(dt, now) {
@@ -594,4 +595,6 @@ function drawOverlay(dt, now, fp, cam, fx) {
   drawPost(dt, fx);
 }
 
-window.R3D = { init, render, resize, on: false, quality: () => ({ drawN, pixelStep, fps: Math.round(1000 / frameMs) }) };
+// drawDist: 지금 그리는 거리(m). HUD가 매 초 읽어 표시한다.
+window.R3D = { init, render, resize, on: false, drawDist: 0,   // init()의 setFog()가 채운다
+  quality: () => ({ drawN, pixelStep, fps: Math.round(1000 / frameMs) }) };

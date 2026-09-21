@@ -523,8 +523,9 @@ class ArcadeRace:
             "persona": PERSONA_LABEL[r.persona], "distance_m": round(r.distance, 1),
             "rpm": round(r.rpm), "finished": r.finished_at is not None,
             "effect": ("slip" if "slip" in r.effects else
-                       "turbo" if ("turbo" in r.effects or "pad" in r.effects) else
-                       "attack" if r.attack > 0 else None),
+                       "turbo" if ("turbo" in r.effects or "pad" in r.effects) else None),
+            # 어택·지침은 아이템 효과와 별개로 겹칠 수 있어 따로 내려준다
+            "attacking": r.attack > 0,
             "tired": r.stamina < FADE_RANGE,
         } for r in self.rivals]
 

@@ -183,3 +183,11 @@ def test_grand_slam_needs_every_stage_three_starred():
     mixed = {**five, 3: {"best_stars": 2}}
     ids = check_session_end(summary, FakeRecords(mixed))
     assert "all_stages" in ids and "all_three_stars" not in ids
+
+
+def test_every_achievement_has_a_category():
+    """업적을 추가하고 탭 분류를 빼먹으면 화면에서 사라진다."""
+    from pedalquest.achievements import ACHIEVEMENTS, CATEGORIES
+    valid = {c for c, _ in CATEGORIES}
+    missing = [aid for aid, a in ACHIEVEMENTS.items() if a.get("cat") not in valid]
+    assert not missing, f"분류 없는 업적: {missing}"

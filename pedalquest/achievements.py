@@ -30,6 +30,20 @@ ACHIEVEMENTS = {
 }
 STAGE_COUNT = 5
 
+# 업적 화면 탭. 25개가 한 줄로 늘어서면 찾기 어려워 묶어서 보여준다.
+CATEGORIES = [("distance", "거리"), ("intensity", "강도"), ("stage", "스테이지"),
+              ("arcade", "아케이드"), ("habit", "습관")]
+_BY_CATEGORY = {
+    "distance":  ["5km_club", "10km_club", "20km_club", "total_100km", "total_500km"],
+    "intensity": ["speed_demon", "calorie_burner", "rpm_machine", "spin_master"],
+    "stage":     ["three_stars", "ghost_buster", "non_stop", "all_stages", "all_three_stars"],
+    "arcade":    ["arcade_win", "podium", "coin_collector", "dog_escape", "item_master"],
+    "habit":     ["first_ride", "streak_3", "streak_7", "streak_14", "early_bird", "night_owl"],
+}
+for _cat, _ids in _BY_CATEGORY.items():
+    for _aid in _ids:
+        ACHIEVEMENTS[_aid]["cat"] = _cat
+
 
 def check_live(distance_m: float, max_speed: float, calories: float) -> list[str]:
     """플레이 중 달성 순간 알리는 업적."""

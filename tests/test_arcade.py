@@ -284,3 +284,17 @@ def test_spurt_threshold_stays_reachable_for_fast_riders():
         assert 9 <= extra <= 19, f"평소 {base} RPM -> +{extra:.0f} RPM 요구"
     race.baseline_rpm = 20                      # 워밍업 중이어도 최소 기준은 있다
     assert race.spurt_threshold() >= 50
+
+
+def test_riders_expose_attack_and_tired_flags():
+    """프론트엔드 이펙트(오라/페이드)는 이 두 필드를 읽는다."""
+    race = make_race(stage_id=1)
+    r = race.rivals[0]
+    row = race.riders()[0]
+    assert row["attacking"] is False and row["tired"] is False
+    r.attack, r.stamina = 5.0, 0.1
+    row = race.riders()[0]
+    assert row["attacking"] is True and row["tired"] is True
+    r.effects["turbo"] = 3.0          # 아이템 효과와 겹쳐도 각각 살아 있어야 한다
+    row = race.riders()[0]
+    assert row["effect"] == "turbo" and row["attacking"] is True
