@@ -305,6 +305,8 @@ function buildCockpit() {
   // 손: 후드를 감싼 장갑 + 몸 쪽으로 빠지며 화면 밖으로 나가는 팔뚝
   const glove = new THREE.MeshLambertMaterial({ color: 0x565d69, flatShading: true });   // 2D 장갑색(#4a515c)과 같은 계열
   const knuck = new THREE.MeshLambertMaterial({ color: 0x6d7583, flatShading: true });
+  const skin = new THREE.MeshLambertMaterial({ color: 0xd9a77f, flatShading: true });
+  const sleeve = new THREE.MeshLambertMaterial({ color: 0xff6b35, flatShading: true });  // ME.jersey
   hands = [];
   for (const s of [-1, 1]) {
     const h = new THREE.Group();
@@ -326,10 +328,19 @@ function buildCockpit() {
     thumb.scale.set(1.1, 0.85, 1.7);
     thumb.position.set(s * 0.19, 0.024, -0.086);    // 안쪽으로 감은 엄지
     h.add(thumb);
-    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.021, 0.035, 7), glove);
-    wrist.position.set(s * 0.211, 0.022, -0.036);   // 손목 끝 — 여기서 화면 밖으로 사라진다
-    wrist.rotation.x = Math.PI / 2 - 0.3;
-    h.add(wrist);
+    // 팔뚝: 후드에서 화면 아래 바깥 모서리로 빠져나간다.
+    // 예전에 안쪽(화면 가운데)으로 모았더니 기둥 두 개처럼 보이고 드롭을 가렸다.
+    // 팔꿈치는 카메라에 훨씬 가까워서, 실제 간격이 좁아도 화면에서는 더 벌어져 보인다.
+    const seg = (x1, y1, z1, x2, y2, z2, r1, r2, mat) => {
+      const from = new THREE.Vector3(x1, y1, z1), dir = new THREE.Vector3(x2, y2, z2).sub(from);
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, dir.length(), 7), mat);
+      mesh.position.copy(from).addScaledVector(dir, 0.5);
+      mesh.quaternion.setFromUnitVectors(up, dir.clone().normalize());
+      return mesh;
+    };
+    // 후드 쪽 절반 = 맨살, 화면 밖 쪽 절반 = 저지 소매
+    h.add(seg(s * 0.207, 0.018, -0.045, s * 0.203, -0.062, 0.115, 0.021, 0.030, skin));
+    h.add(seg(s * 0.203, -0.062, 0.115, s * 0.198, -0.150, 0.300, 0.030, 0.040, sleeve));
     g.add(h);
     hands.push(h);
   }
@@ -337,13 +348,19 @@ function buildCockpit() {
   return g;
 }
 
-// 페달 박자에 맞춘 미세 그립 (좌우 반대 위상). 몸 전체를 움직이지 않고 손만 눌렀다 놨다 한다.
-function updateHands() {
+// 페달 박자에 맞춘 미세 그립 (좌우 반대 위상) + 오르막이면 바 탑으로 손 이동.
+// 몸 전체를 움직이지 않고 손·팔만 움직인다.
+let gripT3d = 0;
+function updateHands(climbing) {
+  gripT3d += ((climbing ? 1 : 0) - gripT3d) * 0.06;
   for (let i = 0; i < hands.length; i++) {
+    const side = i === 0 ? -1 : 1;
     const phase = disp.angle + i * Math.PI;
     const push = clamp(disp.rpm / 110, 0, 1);
-    hands[i].position.y = Math.sin(phase) * 0.003 * push;
-    hands[i].position.x = Math.cos(phase) * 0.0016 * push;
+    // 오르막: 후드에서 바 탑으로 (안쪽·위·뒤로)
+    hands[i].position.x = Math.cos(phase) * 0.0016 * push - side * 0.055 * gripT3d;
+    hands[i].position.y = Math.sin(phase) * 0.003 * push + 0.012 * gripT3d;
+    hands[i].position.z = 0.055 * gripT3d;
   }
 }
 let gaugeTimer = 0;
@@ -643,7 +660,7 @@ function render(dt, now) {
   // 콕핏
   cockpit.visible = fp;
   if (fp) {
-    updateHands();
+    updateHands(climbing);
     updateGauge(dt);
   }
 

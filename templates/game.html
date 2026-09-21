@@ -293,6 +293,13 @@ body.portrait-touch #rotateHint { display: flex; }
 #board .pos { font-family: var(--num); color: var(--muted); width: 12px; }
 #board i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 #board span.gap { margin-left: auto; color: var(--muted); font-size: 13px; font-family: var(--num); }
+#mirror {
+  position: absolute; left: 18px; bottom: 210px; width: 164px; height: 82px;
+  border-radius: 50%; border: 2px solid rgba(255,255,255,0.3);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35); pointer-events: none;
+}
+#mirror.hidden { display: none; }
+@media (max-height: 620px) { #mirror { bottom: 150px; width: 132px; height: 66px; } }
 #itemSlot {
   position: absolute; top: calc(max(16px, env(safe-area-inset-top)) + 52px); right: 16px; pointer-events: auto;
   width: 132px; text-align: center; cursor: pointer;
@@ -494,7 +501,8 @@ html.fx-on .overlay { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(
   <div id="arcadeHud" class="hidden">
     <div id="rankBox"><span id="hRank">1</span><small>/ <span id="hRiders">6</span></small></div>
     <div id="board"></div>
-    <div id="itemSlot">
+    <canvas id="mirror" class="hidden" width="328" height="164"></canvas>
+  <div id="itemSlot">
       <div id="itemBox"></div>
       <div id="spurtBar"><div id="spurtFill"></div></div>
       <div id="itemHint"></div>
@@ -2379,6 +2387,64 @@ function onArcadeEvent(e) {
   }
 }
 
+// --- 룸미러 ---
+// 장면을 한 번 더 렌더하면 그리기가 2배가 된다 (50 → 30fps대). 실제로 알고 싶은 건
+// "누가 얼마나 가까이"라서 풍경까지 비칠 필요가 없다 → 도로와 마커만 그린다.
+const MIRROR_RANGE = 60;      // m. 이보다 뒤는 안 보인다
+let mirrorCtx = null, mirrorSkip = 0;
+function drawMirror() {
+  const el = $("mirror");
+  const on = !!(S && S.arcade && S.state === "playing");
+  el.classList.toggle("hidden", !on);
+  if (!on || (mirrorSkip = (mirrorSkip + 1) % 2)) return;   // 두 프레임에 한 번이면 충분
+  if (!mirrorCtx) mirrorCtx = el.getContext("2d");
+  const g = mirrorCtx, w = el.width, h = el.height;
+  const th = THEMES[curTheme];
+
+  g.clearRect(0, 0, w, h);
+  const sky = g.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, rgb(th.skyBot));
+  sky.addColorStop(0.42, rgb(mix(th.skyBot, th.road[0], 0.6)));
+  sky.addColorStop(1, rgb(th.road[0]));
+  g.fillStyle = sky; g.fillRect(0, 0, w, h);
+
+  // 뒤로 멀어지는 도로 = 아래가 넓고 위가 좁은 사다리꼴 (앞을 볼 때와 반대)
+  g.fillStyle = rgb(mix(th.road[0], th.skyBot, 0.15));
+  g.beginPath();
+  g.moveTo(w * 0.5 - w * 0.06, h * 0.42); g.lineTo(w * 0.5 + w * 0.06, h * 0.42);
+  g.lineTo(w * 0.5 + w * 0.42, h); g.lineTo(w * 0.5 - w * 0.42, h);
+  g.fill();
+  g.strokeStyle = "rgba(255,255,255,0.35)"; g.lineWidth = 1.5;
+  for (const sd of [-1, 1]) {
+    g.beginPath(); g.moveTo(w * 0.5 + sd * w * 0.06, h * 0.42); g.lineTo(w * 0.5 + sd * w * 0.42, h); g.stroke();
+  }
+
+  // 뒤에 있는 선수 = 가까울수록 아래·크게
+  const behind = [];
+  for (const r of S.riders || []) {
+    const gap = S.distance_m - r.distance_m;                 // +면 내 뒤
+    if (gap <= 0 || gap > MIRROR_RANGE) continue;
+    behind.push({ gap, color: r.kind === "ghost" ? "rgba(230,245,255,0.75)" : r.color, name: r.name, lane: r.lane || 0 });
+  }
+  behind.sort((a, b) => b.gap - a.gap);                      // 먼 것부터 그려야 가까운 게 위에 온다
+  for (const b of behind) {
+    const t = b.gap / MIRROR_RANGE;                          // 0 = 코앞
+    const y = h * 0.44 + (1 - t) * h * 0.46;
+    const x = w * 0.5 + b.lane * (0.1 + (1 - t) * 0.26) * w;
+    const r = 4 + (1 - t) * 6;
+    g.globalAlpha = 0.45 + (1 - t) * 0.55;
+    g.fillStyle = b.color;
+    g.beginPath(); g.ellipse(x, y, r, r * 1.15, 0, 0, Math.PI * 2); g.fill();
+    g.globalAlpha = 1;
+  }
+  if (behind.length) {                                       // 제일 가까운 선수만 이름
+    const n = behind[behind.length - 1];
+    g.font = "700 20px system-ui"; g.textAlign = "center"; g.textBaseline = "top";
+    g.lineWidth = 4; g.strokeStyle = "rgba(0,0,0,0.65)";
+    g.strokeText(n.name, w * 0.5, 6); g.fillStyle = "#fff"; g.fillText(n.name, w * 0.5, 6);
+  }
+}
+
 let lastBoard = "";
 function updateArcadeHud() {
   const a = S.arcade;
@@ -2534,6 +2600,7 @@ function step(now, dt) {
   if (view !== "game") { ambientDist += 5 * dt; disp.angle += Math.PI * 2 * dt; }
 
   if (window.R3D && R3D.on) R3D.render(dt, now); else render(dt, now);
+  drawMirror();
   // FPS (3D일 때만 표시: 태블릿 성능 확인용)
   fpsFrames++;
   if (now - fpsAt > 1000) {
