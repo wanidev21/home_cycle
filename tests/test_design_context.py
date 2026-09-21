@@ -46,10 +46,18 @@ def test_css_tokens_still_exist():
 
 
 def test_event_kinds_still_handled():
-    """문서의 이벤트 표에 적힌 kind는 프론트엔드가 실제로 처리해야 한다."""
+    """문서의 이벤트 표에 적힌 kind는 프론트엔드가 실제로 처리해야 한다.
+
+    문서 전체에서 snake_case를 긁으면 `persona_id` 같은 필드 이름까지 이벤트로 오인한다
+    → 이벤트 표 안에서만 찾는다.
+    """
     html = read(HTML)
-    from pedalquest.achievements import ACHIEVEMENTS  # noqa: F401  (achievement 이벤트는 별도 경로)
-    kinds = {k for k in backticked(r"[a-z]+_[a-z_]+") if k != "session_log"}
+    doc = read(DOC)
+    start = doc.find("**이벤트 종류**")
+    assert start > 0, "이벤트 표를 찾지 못했다 (문서 구조가 바뀌었나?)"
+    rows = [ln for ln in doc[start:start + 900].split("\n") if ln.startswith("|")]
+    kinds = set(re.findall(r"`([a-z]+_[a-z_]+)`", "\n".join(rows)))
+    assert len(kinds) > 10, f"이벤트 표에서 {len(kinds)}개만 찾음 — 표가 비었거나 형식이 바뀌었다"
     handled = set(re.findall(r'case "([a-z_]+)":', html)) | set(re.findall(r'kind === "([a-z_]+)"', html))
     missing = [k for k in kinds if k not in handled]
     assert not missing, f"문서가 말하는데 game.html이 처리하지 않는 이벤트: {sorted(missing)}"
