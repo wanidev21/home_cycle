@@ -807,6 +807,17 @@ function toast(text, cls = "") {
   setTimeout(() => el.remove(), 3500);
 }
 
+// 한글 이름 + 조사. 받침이 있으면 사람 이름 뒤에 "이"를 붙인다 (민준이가 / 지호가).
+// 받침 판정: 한글 음절 U+AC00~U+D7A3에서 (코드-0xAC00) % 28 이 0이 아니면 종성이 있다.
+function hasJong(name) {
+  const c = name.charCodeAt(name.length - 1);
+  return c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0;
+}
+// nm("서연", "가") → "서연이가",  nm("지호", "가") → "지호가",  nm("서연") → "서연이"
+function nm(name, particle = "") {
+  return name + (hasJong(name) ? "이" : "") + particle;
+}
+
 const BANNER_MAX = 2, BANNER_SEC = 2.8;
 function banner(text, kind = "") {
   const box = $("raceBanner");
@@ -2112,19 +2123,19 @@ function onArcadeEvent(e) {
     case "boost_pad": audio.boost(); break;
     case "slip": toast(`🍌 미끄러졌다! ${e.coins_lost ? `코인 -${e.coins_lost}` : ""}`); audio.slip(); break;
     case "blocked": toast("🛡 바나나 방어!"); audio.chime("overtake"); break;
-    case "rival_slip": banner(`🍌 ${e.name} 미끄러짐!`, "pass"); audio.slip(); break;
-    case "rival_banana": toast(`⚠ ${e.name}가 바나나를 떨어뜨렸어요!`); break;
-    case "bump": banner(`⭐ ${e.name} 튕겨냄!`, "attack"); audio.boost(); break;
+    case "rival_slip": banner(`🍌 ${nm(e.name, "가")} 미끄러졌어요!`, "pass"); audio.slip(); break;
+    case "rival_banana": toast(`⚠ ${nm(e.name, "가")} 바나나를 떨어뜨렸어요!`); break;
+    case "bump": banner(`⭐ ${nm(e.name, "를")} 튕겨냈다!`, "attack"); audio.boost(); break;
     case "lightning": toast(`⚡ 번개! 라이벌 ${e.count}명 감속`); audio.thunder(); break;
     case "dog_start": toast("🐕 왈왈! 개가 쫓아온다! 전력 질주!"); audio.bark(); break;
     case "dog_caught": toast(`🐕 잡혔다! ${e.coins_lost ? `코인 -${e.coins_lost}` : ""}`); audio.bark(); audio.slip(); break;
     case "dog_escape": toast(`🐕 따돌렸다! 코인 +${e.coins}`); audio.chime("achievement"); break;
     case "last_spurt": toast("🔥 라스트 스퍼트! 300m 남았어요"); audio.chime("overtake"); break;
-    case "rival_attack": banner(`⚡ ${e.name} 치고 나갑니다! · ${e.persona}`, "attack"); audio.whoosh(); break;
-    case "rival_tired": banner(`💨 ${e.name} 페이스가 떨어졌어요`, "tired"); break;
-    case "rival_pass": banner(`${e.name}에게 추월당했어요! 💪`, "warn"); audio.chime("overtaken"); break;
-    case "rival_passed": banner(`${e.name} 추월!`, "pass"); audio.chime("overtake"); break;
-    case "rival_finish": banner(`🏁 ${e.name} 먼저 골인!`, "finish"); break;
+    case "rival_attack": banner(`⚡ ${nm(e.name, "가")} 치고 나갑니다! · ${e.persona}`, "attack"); audio.whoosh(); break;
+    case "rival_tired": banner(`💨 ${nm(e.name)} 페이스가 떨어졌어요`, "tired"); break;
+    case "rival_pass": banner(`${nm(e.name, "에게")} 추월당했어요! 💪`, "warn"); audio.chime("overtaken"); break;
+    case "rival_passed": banner(`${nm(e.name, "를")} 추월!`, "pass"); audio.chime("overtake"); break;
+    case "rival_finish": banner(`🏁 ${nm(e.name, "가")} 먼저 골인!`, "finish"); break;
     case "race_finish": audio.chime("finish"); break;
   }
 }
