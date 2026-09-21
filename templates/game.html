@@ -1317,6 +1317,121 @@ function drawParasol(x, y, m, v) {
   }
 }
 
+// --- 길가 소품 (테마별 다양성). 전부 도로 바깥(갓길)에만 세운다 ---
+function drawSign(x, y, m, v) {              // 네온 간판
+  ctx.fillStyle = "#3a3f47"; ctx.fillRect(x - 0.09 * m, y - 4.2 * m, 0.18 * m, 4.2 * m);
+  const hue = Math.floor(v * 360), w = (1.5 + v * 1.1) * m;
+  ctx.fillStyle = "hsl(" + hue + ",80%,55%)";
+  ctx.fillRect(x - w / 2, y - 6.4 * m, w, 2.3 * m);
+  ctx.fillStyle = "hsla(" + hue + ",95%,75%,0.55)";
+  ctx.fillRect(x - w / 2 + 0.18 * m, y - 6.2 * m, w - 0.36 * m, 0.5 * m);
+  ctx.fillStyle = "rgba(255,255,255,0.75)";
+  for (let k = 0; k < 3; k++) ctx.fillRect(x - w / 2 + 0.3 * m, y - 5.5 * m + k * 0.45 * m, w * (0.3 + v * 0.4), 0.16 * m);
+}
+function drawBusStop(x, y, m) {              // 버스정류장
+  groundShadow(x, y, 2.2 * m, 0.3 * m);
+  ctx.fillStyle = "#4b525c";
+  for (const dx of [-1.7, 1.7]) ctx.fillRect(x + dx * m - 0.08 * m, y - 2.9 * m, 0.16 * m, 2.9 * m);
+  ctx.fillStyle = "#2f343c";
+  ctx.beginPath();
+  ctx.moveTo(x - 2.0 * m, y - 2.9 * m); ctx.lineTo(x + 2.0 * m, y - 2.9 * m);
+  ctx.lineTo(x + 1.8 * m, y - 3.2 * m); ctx.lineTo(x - 1.8 * m, y - 3.2 * m); ctx.fill();
+  ctx.fillStyle = "rgba(170,200,225,0.30)"; ctx.fillRect(x - 1.6 * m, y - 2.85 * m, 3.2 * m, 1.7 * m);
+  ctx.fillStyle = "#6a7381"; ctx.fillRect(x - 1.4 * m, y - 1.1 * m, 2.8 * m, 0.22 * m);   // 벤치
+}
+function drawTrafficLight(x, y, m, v) {      // 신호등
+  ctx.fillStyle = "#3d434b"; ctx.fillRect(x - 0.07 * m, y - 4.6 * m, 0.14 * m, 4.6 * m);
+  ctx.fillStyle = "#23272e"; ctx.fillRect(x - 0.32 * m, y - 6.1 * m, 0.64 * m, 1.6 * m);
+  const on = Math.floor(v * 3);
+  const COLORS = ["#ff4d4f", "#ffc53d", "#3ddc84"];
+  for (let k = 0; k < 3; k++) {
+    ctx.fillStyle = k === on ? COLORS[k] : "rgba(255,255,255,0.10)";
+    ctx.beginPath(); ctx.arc(x, y - 5.75 * m + k * 0.45 * m, 0.17 * m, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function drawFence(x, y, m, v) {             // 흰 울타리
+  const n = 5 + Math.floor(v * 3), w = 2.6 * m;
+  ctx.strokeStyle = "#e9ecef"; ctx.lineWidth = Math.max(1, 0.1 * m); ctx.lineCap = "butt";
+  for (let k = 0; k < n; k++) {
+    const px = x - w / 2 + (k / (n - 1)) * w;
+    ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px, y - 1.1 * m); ctx.stroke();
+  }
+  for (const ry of [0.75, 0.35]) {
+    ctx.beginPath(); ctx.moveTo(x - w / 2, y - ry * m); ctx.lineTo(x + w / 2, y - ry * m); ctx.stroke();
+  }
+  ctx.lineCap = "round";
+}
+function drawMailbox(x, y, m) {
+  groundShadow(x, y, 0.4 * m, 0.1 * m);
+  ctx.fillStyle = "#6a7078"; ctx.fillRect(x - 0.06 * m, y - 1.2 * m, 0.12 * m, 1.2 * m);
+  ctx.fillStyle = "#e03131";
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x - 0.3 * m, y - 2.0 * m, 0.6 * m, 0.85 * m, 0.14 * m);
+  else ctx.rect(x - 0.3 * m, y - 2.0 * m, 0.6 * m, 0.85 * m);
+  ctx.fill();
+  ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(x - 0.18 * m, y - 1.78 * m, 0.36 * m, 0.12 * m);
+}
+function drawFlowerBed(x, y, m, v) {
+  ctx.fillStyle = "#4c8f46";
+  ctx.beginPath(); ctx.ellipse(x, y - 0.1 * m, 1.3 * m, 0.4 * m, 0, 0, Math.PI * 2); ctx.fill();
+  if (m < 1.1) return;                        // 멀면 꽃은 생략
+  for (let k = 0; k < 10; k++) {
+    const a = hash2(v * 90 + k), b = hash3(v * 40 + k);
+    ctx.fillStyle = "hsl(" + Math.floor(a * 360) + ",75%,65%)";
+    ctx.beginPath(); ctx.arc(x + (a - 0.5) * 2.2 * m, y - 0.15 * m - b * 0.45 * m, 0.11 * m, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function drawGuardrail(x, y, m) {
+  ctx.fillStyle = "#8d949c";
+  for (const dx of [-1.4, 0, 1.4]) ctx.fillRect(x + dx * m - 0.06 * m, y - 1.0 * m, 0.12 * m, 1.0 * m);
+  ctx.fillStyle = "#c0c6cc";
+  for (const ry of [1.05, 0.62]) ctx.fillRect(x - 1.7 * m, y - ry * m, 3.4 * m, 0.16 * m);
+  ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fillRect(x - 1.7 * m, y - 1.05 * m, 3.4 * m, 0.05 * m);
+}
+function drawWarnSign(x, y, m) {
+  ctx.fillStyle = "#6a7078"; ctx.fillRect(x - 0.06 * m, y - 2.2 * m, 0.12 * m, 2.2 * m);
+  ctx.fillStyle = "#ffd700";
+  ctx.beginPath();
+  ctx.moveTo(x, y - 3.5 * m); ctx.lineTo(x + 0.75 * m, y - 2.1 * m); ctx.lineTo(x - 0.75 * m, y - 2.1 * m);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#1b1b1f";
+  ctx.fillRect(x - 0.07 * m, y - 3.05 * m, 0.14 * m, 0.55 * m);
+  ctx.fillRect(x - 0.07 * m, y - 2.4 * m, 0.14 * m, 0.14 * m);
+}
+function drawWaterfall(x, y, m, v) {
+  const h = (3.2 + v * 2.4) * m;
+  ctx.fillStyle = "rgba(120,180,255,0.55)";
+  for (let k = 0; k < 3; k++) ctx.fillRect(x + (k - 1) * 0.28 * m, y - h, 0.2 * m, h);
+  ctx.fillStyle = "rgba(255,255,255,0.75)";
+  for (let k = 0; k < 6; k++) {
+    const a = hash2(v * 70 + k);
+    ctx.beginPath(); ctx.arc(x + (a - 0.5) * 1.5 * m, y - a * 0.35 * m, 0.09 * m, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function drawSeagull(x, y, m, v) {
+  const fy = y - (5 + v * 3) * m + Math.sin(performance.now() / 800 + v * 6) * 0.5 * m;
+  ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = Math.max(1, 0.07 * m); ctx.lineCap = "round";
+  for (let k = 0; k < 2; k++) {
+    const gx = x + (k - 0.5) * 1.6 * m, gy = fy + k * 0.7 * m, w = (0.5 + v * 0.2) * m;
+    ctx.beginPath();
+    ctx.moveTo(gx - w, gy); ctx.lineTo(gx, gy - 0.3 * m); ctx.lineTo(gx + w, gy); ctx.stroke();
+  }
+}
+function drawSurfboard(x, y, m, v) {
+  groundShadow(x, y, 0.35 * m, 0.1 * m);
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate((v - 0.5) * 0.35);
+  ctx.fillStyle = v > 0.5 ? "#ffd166" : "#f8f9fa";
+  ctx.beginPath(); ctx.ellipse(0, -1.3 * m, 0.3 * m, 1.35 * m, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = v > 0.5 ? "#ef476f" : "#4dabf7";
+  ctx.fillRect(-0.3 * m, -1.5 * m, 0.6 * m, 0.22 * m);
+  ctx.restore();
+}
+function drawManhole(x, y, m) {
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.beginPath(); ctx.ellipse(x, y, 0.24 * m, 0.08 * m, 0, 0, Math.PI * 2); ctx.fill();
+}
+
 function drawFinishArch(x, y, m, roadHalf) {
   const hw = roadHalf + 0.8 * m;
   ctx.fillStyle = "#23272e";
@@ -1597,7 +1712,33 @@ const GHOST = { tire: "#d8f3ff", shorts: "#d8f3ff", skin: "#d8f3ff", shoe: "#fff
 // =====================================================================
 // 렌더링 (pseudo-3D 세그먼트 투영)
 // =====================================================================
-const DRAW = 140;       // 그릴 세그먼트 수 (≈420m)
+const DRAW = 140;       // 버퍼가 감당하는 최대 세그먼트 수 (≈420m)
+const DRAW_MIN = 70;    // 저사양에서 줄일 수 있는 하한 (≈210m)
+// 3D와 같은 방식: 기기 성능을 미리 알 수 없으니 실제 프레임 시간을 보고 스스로 조절한다.
+// 먼저 길가 오브젝트를 솎고(눈에 덜 띔), 그래도 느리면 그리는 거리를 줄인다.
+const FPS_LOW = 27, FPS_HIGH = 45;
+let drawSeg = DRAW;     // 지금 그리는 세그먼트 수
+let sceneryDens = 1;    // 길가 오브젝트 밀도 (0.35~1)
+let frameMs2D = 16.7, qualityAt2D = 0;
+
+function adapt2D(dt, now) {
+  // 백그라운드 탭·화면 꺼짐이면 rAF가 1Hz라 그 프레임은 성능 표본이 아니다
+  if (dt > 0.2) { qualityAt2D = now; return; }
+  frameMs2D += (dt * 1000 - frameMs2D) * 0.08;
+  if (now - qualityAt2D < 1200) return;
+  const fps = 1000 / frameMs2D;
+  if (fps < FPS_LOW) {
+    if (sceneryDens > 0.35) sceneryDens = Math.max(0.35, sceneryDens - 0.15);
+    else if (drawSeg > DRAW_MIN) drawSeg = Math.max(DRAW_MIN, drawSeg - 12);
+    else return;
+    qualityAt2D = now;
+  } else if (fps > FPS_HIGH) {
+    if (drawSeg < DRAW) drawSeg = Math.min(DRAW, drawSeg + 8);
+    else if (sceneryDens < 1) sceneryDens = Math.min(1, sceneryDens + 0.1);
+    else return;
+    qualityAt2D = now;
+  }
+}
 const ROAD_W = 2.2;     // 도로 반폭(m)
 // 카메라: "fp" 1인칭(핸들바 시점) / "tp" 뒤에서 보는 시점
 const CAMS = {
@@ -1637,7 +1778,7 @@ const segBuf = Array.from({ length: DRAW }, () => ({}));
 let bgOffset = 0;
 const speedLines = [];
 
-const segFog = (n) => clamp(1 - Math.exp(-Math.pow(n / DRAW, 2) * 4), 0, 0.9);
+const segFog = (n) => clamp(1 - Math.exp(-Math.pow(n / drawSeg, 2) * 4), 0, 0.9);
 
 function curveAt(idx) {
   return 0.0016 * Math.sin(idx * 0.011) * Math.max(0, Math.sin(idx * 0.0037 + 1.2));
@@ -1645,6 +1786,7 @@ function curveAt(idx) {
 
 let ambientDist = 0;   // 메뉴 화면 뒤 배경: 천천히 달리는 모습
 function render(dt, now) {
+  adapt2D(dt, now);
   const pos = view === "game" ? disp.dist : ambientDist;
   const fp = view === "game" && camMode === "fp";   // 메뉴 배경은 항상 뒷모습
   const cam = CAMS[fp ? "fp" : "tp"];
@@ -1685,7 +1827,7 @@ function render(dt, now) {
   hz.addColorStop(1, `rgba(${fogCol[0] | 0},${fogCol[1] | 0},${fogCol[2] | 0},0.55)`);
   ctx.fillStyle = hz; ctx.fillRect(0, HORIZON - H * 0.12, W, H * 0.12 + 2);
   // 지평선 아래 바닥색
-  const groundFar = THEMES[themeAt(pos + DRAW * SEG)].ground[0];
+  const groundFar = THEMES[themeAt(pos + drawSeg * SEG)].ground[0];
   ctx.fillStyle = rgb(mix(groundFar, fogCol, 0.88)); ctx.fillRect(0, HORIZON, W, H - HORIZON);
 
   // 도로 투영 (가까운 곳 → 먼 곳, maxY로 언덕 뒤 가림)
@@ -1714,7 +1856,7 @@ function render(dt, now) {
     }
   }
 
-  for (let n = 0; n < DRAW; n++) {
+  for (let n = 0; n < drawSeg; n++) {
     const idx = baseIdx + n;
     const z1 = idx * SEG, z2 = z1 + SEG;
     const cz1 = z1 - camZ, cz2 = z2 - camZ;
@@ -1747,7 +1889,9 @@ function render(dt, now) {
     const edge = col(th.edge);
     quad(edge, sx1 - w1 * 0.93, sy1, w1 * 0.022, sx2 - w2 * 0.93, sy2, w2 * 0.022);
     quad(edge, sx1 + w1 * 0.93, sy1, w1 * 0.022, sx2 + w2 * 0.93, sy2, w2 * 0.022);
-    if (mod(idx, 4) < 2) quad(col(th.lane), sx1, sy1, w1 * 0.016, sx2, sy2, w2 * 0.016);
+    // 차선은 가끔 지워져 있다 (마모) → 일정한 점선보다 길이 살아 보인다
+    if (mod(idx, 4) < 2 && hash(idx + 999) > 0.15) quad(col(th.lane), sx1, sy1, w1 * 0.016, sx2, sy2, w2 * 0.016);
+    if (hash(idx) < 0.03 && w1 > 6) drawManhole(sx1 + (hash2(idx) - 0.5) * w1 * 1.2, sy1, w1 * 0.9);
     if (padIdx.has(idx)) {
       const on = Math.floor(performance.now() / 150) % 2 === mod(idx, 2);
       quad(on ? "#00e5ff" : "#0096c7", sx1, sy1, w1 * 0.55, sx2, sy2, w2 * 0.55);
@@ -1771,7 +1915,7 @@ function render(dt, now) {
   // 오브젝트 + 고스트 (먼 곳 → 가까운 곳)
   const ghost = S && S.riders ? S.riders.find((r) => r.kind === "ghost") : null;
   const ghostIdx = ghost ? Math.floor(ghost.distance_m / SEG) : null;
-  for (let n = DRAW - 1; n >= 0; n--) {
+  for (let n = drawSeg - 1; n >= 0; n--) {
     const s = segBuf[n];
     if (!s.sx || s.m <= 0) continue;
     const idx = s.idx, m = s.m;
@@ -1869,21 +2013,33 @@ function quad(color, x1, y1, w1, x2, y2, w2) {
 
 function drawSprites(idx, s, m) {
   const theme = themeAt(idx * SEG);
-  const h = hash(idx), v = hash3(idx), side = hash2(idx) < 0.5 ? -1 : 1;
+  // 밀도를 낮추면 해시가 큰 세그먼트부터 비므로, 남는 오브젝트의 자리는 그대로다 (깜빡이지 않음)
+  const h = hash(idx) / sceneryDens, v = hash3(idx), side = hash2(idx) < 0.5 ? -1 : 1;
   const at = (off) => s.sx + side * (s.w + off * m);
   if (theme === "city") {
     if (idx % 8 === 0) { drawLamp(s.sx - s.w - 1.0 * m, s.sy, m); drawLamp(s.sx + s.w + 1.0 * m, s.sy, m); }
     else if (h < 0.22) drawBuilding(at(10 + v * 8), s.sy, m, v);
     else if (h < 0.3) drawTree(at(2.5), s.sy, m, v, TREE_TONES.city);
+    else if (h < 0.34) drawSign(at(3 + v * 3), s.sy, m, v);
+    else if (h < 0.37) drawBusStop(at(3.5), s.sy, m);
+    else if (h < 0.40) drawTrafficLight(at(1.6), s.sy, m, v);
   } else if (theme === "suburb") {
     if (h < 0.2) drawTree(at(2 + v * 7), s.sy, m, v);
     else if (h < 0.25) drawHouse(at(9 + v * 4), s.sy, m, v);
+    else if (h < 0.30) drawFence(at(2.2), s.sy, m, v);
+    else if (h < 0.33) drawMailbox(at(1.6), s.sy, m);
+    else if (h < 0.36) drawFlowerBed(at(2 + v * 2), s.sy, m, v);
   } else if (theme === "mountain") {
     if (h < 0.28) drawPine(at(2 + v * 9), s.sy, m, v);
     else if (h < 0.36) drawRock(at(1.5 + v * 3), s.sy, m, v);
+    else if (h < 0.42) drawGuardrail(at(1.5), s.sy, m);
+    else if (h < 0.45) drawWarnSign(at(1.7), s.sy, m);
+    else if (h < 0.48) drawWaterfall(at(6 + v * 5), s.sy, m, v);
   } else if (theme === "beach") {
     if (h < 0.12) drawPalm(at(2.5 + v * 5), s.sy, m, v);
     else if (h < 0.17) drawParasol(at(4 + v * 6), s.sy, m, v);
+    else if (h < 0.21) drawSurfboard(at(3 + v * 3), s.sy, m, v);
+    else if (h < 0.25) drawSeagull(at(5 + v * 6), s.sy, m, v);
   }
 }
 
@@ -2327,14 +2483,14 @@ function step(now, dt) {
   // FPS (3D일 때만 표시: 태블릿 성능 확인용)
   fpsFrames++;
   if (now - fpsAt > 1000) {
+    // 2D·3D 모두 적응형 품질이 어디로 맞춰졌는지 보여준다 (태블릿 확인용, 디버그라 눈에 덜 띄게)
     const on3d = !!(window.R3D && R3D.on);
-    $("fpsChip").classList.toggle("hidden", !on3d);
-    if (on3d) {
-      // 적응형 품질이 어디로 맞춰졌는지 같이 (태블릿 확인용, 디버그라 눈에 덜 띄게)
-      const d = R3D.drawDist;
-      $("fpsChip").textContent = `3D · ${Math.round(fpsFrames * 1000 / (now - fpsAt))} fps`
-        + (d ? ` · ${Math.round(d)}m` : "");
-    }
+    $("fpsChip").classList.toggle("hidden", view !== "game");
+    const fps = Math.round(fpsFrames * 1000 / (now - fpsAt));
+    const dist = on3d ? R3D.drawDist : drawSeg * SEG;
+    $("fpsChip").textContent = `${on3d ? "3D" : "2D"} · ${fps} fps`
+      + (dist ? ` · ${Math.round(dist)}m` : "")
+      + (!on3d && sceneryDens < 1 ? ` · 밀도 ${Math.round(sceneryDens * 100)}%` : "");
     fpsFrames = 0; fpsAt = now;
   }
   updateHud(dt);
