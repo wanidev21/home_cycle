@@ -1817,9 +1817,16 @@ async function setGfx(on) {
   if (window.R3D) R3D.on = on;
   $("game3d").classList.toggle("hidden", !on);
   if (on) R3D.resize();
-  $("gfxLabel").textContent = on ? "그래픽 3D (베타)" : "그래픽 2D";
+  $("gfxLabel").textContent = on ? "그래픽 3D" : "그래픽 2D";
 }
 $("btnGfx").addEventListener("click", () => setGfx(!(window.R3D && R3D.on)));
+// 3D가 기본이 된 만큼, 달리는 중 WebGL 컨텍스트가 날아가도 검은 화면으로 끝나지 않게.
+// 메모리가 빠듯한 태블릿에서 크롬이 실제로 컨텍스트를 회수한다.
+window.onGfxLost = () => {
+  $("game3d").classList.add("hidden");
+  $("gfxLabel").textContent = "그래픽 2D";
+  toast("3D가 중단돼 2D로 이어갑니다");
+};
 const NUM_FONT = '"Bahnschrift","DIN Alternate","Roboto Condensed",system-ui,sans-serif';
 const segBuf = Array.from({ length: DRAW }, () => ({}));
 let bgOffset = 0;
@@ -2548,7 +2555,11 @@ const pageStart = performance.now();
 // 시작
 resize();
 setCam(camMode);
-try { if (localStorage.getItem("pq.gfx") === "3d") setGfx(true); } catch (e) { /* 저장소 없음 */ }
+// 기본은 3D. 태블릿 실측에서 2D 27fps / 3D 50fps라 3D가 더 부드럽다.
+// 2D는 직접 고른 경우와, 3D를 못 켜는 기기의 대비책으로만 남는다.
+let want3d = true;
+try { want3d = localStorage.getItem("pq.gfx") !== "2d"; } catch (e) { /* 저장소 없음 */ }
+if (want3d) setGfx(true);
 track = buildFreeTrack();
 api("/api/achievements").then((list) => { achMeta = Object.fromEntries(list.map((a) => [a.id, a])); }).catch(() => {});
 connectWS();

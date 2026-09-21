@@ -156,6 +156,77 @@ function windowTexture() {
   windowTex.magFilter = THREE.NearestFilter;
   return windowTex;
 }
+// --- 2D에 있던 길가 소품의 저폴리 판 (3D가 기본 렌더러라 같은 풍경이 나와야 한다) ---
+function makeSign() {          // 네온 간판 (색은 인스턴스마다 다르게 칠한다)
+  return merge([
+    part(new THREE.BoxGeometry(0.22, 4.2, 0.22), "#3a3f47", 0, 2.1, 0),
+    part(new THREE.BoxGeometry(2.2, 2.3, 0.18), "#ffffff", 0, 5.3, 0),
+  ]);
+}
+function makeBusStop() {
+  const ps = [part(new THREE.BoxGeometry(4.2, 0.22, 2.0), "#2f343c", 0, 2.9, 0)];
+  for (const dx of [-1.9, 1.9]) ps.push(part(new THREE.BoxGeometry(0.16, 2.9, 0.16), "#4b525c", dx, 1.45, 0));
+  ps.push(part(new THREE.BoxGeometry(3.6, 1.7, 0.08), "#9fc4dd", 0, 1.9, -0.9));
+  ps.push(part(new THREE.BoxGeometry(3.0, 0.22, 0.5), "#6a7381", 0, 1.0, 0.3));
+  return merge(ps);
+}
+function makeTrafficLight() {
+  return merge([
+    part(new THREE.CylinderGeometry(0.08, 0.1, 4.6, 5), "#3d434b", 0, 2.3, 0),
+    part(new THREE.BoxGeometry(0.66, 1.6, 0.4), "#23272e", 0, 5.4, 0),
+    part(new THREE.SphereGeometry(0.17, 6, 5), "#ff4d4f", 0, 5.95, 0.2),
+    part(new THREE.SphereGeometry(0.17, 6, 5), "#6b5a1f", 0, 5.4, 0.2),
+    part(new THREE.SphereGeometry(0.17, 6, 5), "#1f5a33", 0, 4.85, 0.2),
+  ]);
+}
+function makeFence() {
+  const ps = [];
+  for (let k = 0; k < 6; k++) ps.push(part(new THREE.BoxGeometry(0.1, 1.1, 0.1), "#e9ecef", -1.3 + k * 0.52, 0.55, 0));
+  for (const ry of [0.78, 0.36]) ps.push(part(new THREE.BoxGeometry(2.8, 0.09, 0.07), "#e9ecef", 0, ry, 0));
+  return merge(ps);
+}
+function makeMailbox() {
+  return merge([
+    part(new THREE.CylinderGeometry(0.06, 0.07, 1.2, 5), "#6a7078", 0, 0.6, 0),
+    part(new THREE.BoxGeometry(0.6, 0.85, 0.45), "#e03131", 0, 1.6, 0),
+    part(new THREE.BoxGeometry(0.36, 0.12, 0.05), "#1b1b1f", 0, 1.78, 0.24),
+  ]);
+}
+function makeFlowerBed() {
+  const ps = [part(new THREE.SphereGeometry(1.2, 7, 4), "#4c8f46", 0, 0.1, 0, 0, 0, 1, 0.35, 0.8)];
+  const tones = ["#ff8fa3", "#ffd166", "#c77dff", "#ffffff"];
+  for (let k = 0; k < 7; k++) {
+    const a = (k / 7) * Math.PI * 2;
+    ps.push(part(new THREE.SphereGeometry(0.13, 5, 4), tones[k % 4],
+      Math.cos(a) * 0.85, 0.38 + (k % 3) * 0.06, Math.sin(a) * 0.55));
+  }
+  return merge(ps);
+}
+function makeGuardrail() {
+  const ps = [];
+  for (const dx of [-1.5, 0, 1.5]) ps.push(part(new THREE.BoxGeometry(0.12, 1.0, 0.12), "#8d949c", dx, 0.5, 0));
+  for (const ry of [1.02, 0.6]) ps.push(part(new THREE.BoxGeometry(3.4, 0.16, 0.09), "#c0c6cc", 0, ry, 0));
+  return merge(ps);
+}
+function makeWarnSign() {
+  return merge([
+    part(new THREE.CylinderGeometry(0.06, 0.07, 2.2, 5), "#6a7078", 0, 1.1, 0),
+    part(new THREE.ConeGeometry(0.85, 1.4, 3), "#ffd700", 0, 2.85, 0),
+    part(new THREE.BoxGeometry(0.14, 0.5, 0.04), "#1b1b1f", 0, 2.75, 0.1),
+  ]);
+}
+function makeWaterfall() {
+  const ps = [part(new THREE.BoxGeometry(1.5, 0.5, 1.2), "#7d8894", 0, 4.2, 0)];
+  for (let k = 0; k < 3; k++) ps.push(part(new THREE.BoxGeometry(0.34, 4.2, 0.1), "#9ecbff", (k - 1) * 0.42, 2.0, 0.05));
+  ps.push(part(new THREE.SphereGeometry(0.7, 6, 4), "#eaf4ff", 0, 0.12, 0.1, 0, 0, 1, 0.4, 0.8));
+  return merge(ps);
+}
+function makeSurfboard() {
+  return merge([
+    part(new THREE.SphereGeometry(0.34, 6, 5), "#f8f9fa", 0, 1.35, 0, 0, 0, 1, 4.0, 0.35),
+    part(new THREE.BoxGeometry(0.62, 0.22, 0.12), "#ef476f", 0, 1.5, 0),
+  ]);
+}
 function makeBuilding([w, h, d]) {
   const g = new THREE.BoxGeometry(w, h, d);
   g.translate(0, h / 2, 0);
@@ -286,6 +357,12 @@ function updateGauge(dt) {
 // ---------------------------------------------------------------------
 function init(canvas) {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
+  // 컨텍스트를 잃으면 그리기를 멈추고 2D에게 넘긴다 (기본 렌더러라 멈추면 게임이 끝난다)
+  canvas.addEventListener("webglcontextlost", (e) => {
+    e.preventDefault();
+    window.R3D.on = false;
+    if (typeof window.onGfxLost === "function") window.onGfxLost();
+  });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   scene = new THREE.Scene();
   fog = new THREE.Fog(0xd4ecf6, FOG_NEAR, 470);
@@ -340,6 +417,16 @@ function init(canvas) {
   addInstanced("lamp", makeLamp(), lambert(), 80);
   addInstanced("palm", makePalm(), lambert(), 60);
   addInstanced("parasol", makeParasol(), lambert(), 40);
+  addInstanced("sign", makeSign(), lambert(), 40);
+  addInstanced("busstop", makeBusStop(), lambert(), 20);
+  addInstanced("light", makeTrafficLight(), lambert(), 20);
+  addInstanced("fence", makeFence(), lambert(), 50);
+  addInstanced("mailbox", makeMailbox(), lambert(), 30);
+  addInstanced("flowers", makeFlowerBed(), lambert(), 40);
+  addInstanced("rail", makeGuardrail(), lambert(), 60);
+  addInstanced("warn", makeWarnSign(), lambert(), 25);
+  addInstanced("falls", makeWaterfall(), lambert(), 20);
+  addInstanced("surf", makeSurfboard(), lambert(), 25);
   const bmat = new THREE.MeshLambertMaterial({ map: windowTexture(), flatShading: true });
   BUILD_VARIANTS.forEach((v, i) => addInstanced("bld" + i, makeBuilding(v), bmat, 40));
 
@@ -566,15 +653,25 @@ function placeScenery() {
         const bc = ["#9aa5b1", "#b8a48e", "#8593a3", "#c2b6a3", "#6f7f91", "#a89f96"][Math.floor(v * 6) % 6];
         put("bld" + b, px(10 + v * 8 + w / 2 - 3), py, pz, 1, 0, bc);
       } else if (h < 0.3) put("treeCity", px(2.5), py, pz, 0.85 + v * 0.6, rot);
+      else if (h < 0.34) put("sign", px(3 + v * 3), py, pz, 1, side < 0 ? 0 : Math.PI, `hsl(${Math.floor(v * 360)},80%,55%)`);
+      else if (h < 0.37) put("busstop", px(3.5), py, pz, 1, side < 0 ? 0 : Math.PI);
+      else if (h < 0.40) put("light", px(1.6), py, pz, 1, side < 0 ? 0 : Math.PI);
     } else if (theme === "suburb") {
       if (h < 0.2) put("tree", px(2 + v * 7), py, pz, 0.85 + v * 0.6, rot);
       else if (h < 0.25) put("house", px(9 + v * 4), py, pz, 1, side < 0 ? Math.PI / 2 : -Math.PI / 2, ["#ffffff", "#e8eef6", "#fff0e8"][Math.floor(v * 3)]);
+      else if (h < 0.30) put("fence", px(2.2), py, pz, 1, 0);
+      else if (h < 0.33) put("mailbox", px(1.6), py, pz, 1, rot);
+      else if (h < 0.36) put("flowers", px(2 + v * 2), py, pz, 0.8 + v * 0.5, rot);
     } else if (theme === "mountain") {
       if (h < 0.28) put("pine", px(2 + v * 9), py, pz, 0.9 + v * 0.9, rot);
       else if (h < 0.36) put("rock", px(1.5 + v * 3), py, pz, 0.6 + v, rot);
+      else if (h < 0.42) put("rail", px(1.5), py, pz, 1, 0);
+      else if (h < 0.45) put("warn", px(1.7), py, pz, 1, side < 0 ? 0 : Math.PI);
+      else if (h < 0.48) put("falls", px(6 + v * 5), py, pz, 0.8 + v * 0.8, side < 0 ? 0 : Math.PI);
     } else if (theme === "beach") {
       if (h < 0.12) put("palm", px(2.5 + v * 5), py, pz, 0.9 + v * 0.5, rot);
       else if (h < 0.17) put("parasol", px(4 + v * 6), py, pz, 1, rot, v > 0.5 ? "#ffffff" : "#8fd0ff");
+      else if (h < 0.21) put("surf", px(3 + v * 3), py, pz, 1, rot, v > 0.5 ? "#ffd166" : "#f8f9fa");
     }
   }
   for (const k in inst) {
