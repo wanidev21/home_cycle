@@ -105,3 +105,43 @@ def test_recent_avg_rpm_allows_high_cadence(records):
     assert records.recent_avg_rpm() == pytest.approx(113)
     records2 = records
     assert records2.recent_avg_rpm(limit=0, default=65) == 65
+
+
+# --- 영상 라이딩 코스 목록 ---
+
+def test_video_courses_lists_only_files_that_exist(tmp_path, monkeypatch):
+    """courses.json이 낡아서 없는 파일을 가리켜도 목록이 깨지면 안 된다."""
+    import json as _json
+    from pedalquest import server
+
+    vd = tmp_path / "video"
+    vd.mkdir()
+    (vd / "hangang.mp4").write_bytes(b"x" * 2_000_000)
+    (vd / "courses.json").write_text(_json.dumps([
+        {"file": "hangang.mp4", "name": "한강", "filmed_kmh": 22, "note": "여의도→반포"},
+        {"file": "sold.mp4", "name": "지운 영상", "filmed_kmh": 18},
+    ]), encoding="utf-8")
+    monkeypatch.setattr(server, "VIDEO_DIR", vd)
+
+    rows = server.video_courses()
+    assert [r["file"] for r in rows] == ["hangang.mp4"]
+    assert rows[0]["name"] == "한강" and rows[0]["filmed_kmh"] == 22
+    assert rows[0]["url"] == "/static/video/hangang.mp4"
+    assert rows[0]["size_mb"] == 2.0
+
+
+def test_video_course_without_metadata_gets_a_default(tmp_path, monkeypatch):
+    from pedalquest import server
+    vd = tmp_path / "video"
+    vd.mkdir()
+    (vd / "raw_clip.mp4").write_bytes(b"x")
+    monkeypatch.setattr(server, "VIDEO_DIR", vd)
+    row = server.video_courses()[0]
+    assert row["name"] == "raw_clip"
+    assert row["filmed_kmh"] == server.DEFAULT_FILMED_KMH
+
+
+def test_missing_video_dir_is_not_an_error(tmp_path, monkeypatch):
+    from pedalquest import server
+    monkeypatch.setattr(server, "VIDEO_DIR", tmp_path / "nope")
+    assert server.video_courses() == []

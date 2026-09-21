@@ -150,6 +150,11 @@ def create_app(config, game, sensor, records, mock: bool = False) -> FastAPI:
         unlocked = records.unlocked()
         return [{"id": aid, **a, "unlocked_at": unlocked.get(aid)} for aid, a in ACHIEVEMENTS.items()]
 
+    @app.get("/api/videos")
+    async def list_videos():
+        """영상 라이딩 코스 목록. static/video/courses.json + 실제로 있는 파일만."""
+        return video_courses()
+
     @app.get("/api/stats")
     async def stats():
         return records.stats()
@@ -164,3 +169,36 @@ def create_app(config, game, sensor, records, mock: bool = False) -> FastAPI:
         return {"url": f"http://{get_lan_ip()}:{config.web_port}"}
 
     return app
+
+
+VIDEO_DIR = ROOT / "static" / "video"
+DEFAULT_FILMED_KMH = 20.0
+
+
+def video_courses() -> list[dict]:
+    """촬영 영상 목록. 파일이 있는 것만 돌려준다 (courses.json이 낡아도 깨지지 않게).
+
+    filmed_kmh = 촬영할 때의 평균 속도. 재생 속도를 여기에 맞춰 조절한다.
+    """
+    if not VIDEO_DIR.exists():
+        return []
+    meta = {}
+    cfg = VIDEO_DIR / "courses.json"
+    if cfg.exists():
+        try:
+            for row in json.loads(cfg.read_text(encoding="utf-8")):
+                meta[row["file"]] = row
+        except (ValueError, KeyError) as e:
+            print(f"⚠ courses.json을 읽지 못했습니다: {e}")
+    out = []
+    for f in sorted(VIDEO_DIR.glob("*.mp4")):
+        m = meta.get(f.name, {})
+        out.append({
+            "file": f.name,
+            "url": f"/static/video/{f.name}",
+            "name": m.get("name") or f.stem,
+            "filmed_kmh": float(m.get("filmed_kmh") or DEFAULT_FILMED_KMH),
+            "note": m.get("note", ""),
+            "size_mb": round(f.stat().st_size / 1e6, 1),
+        })
+    return out

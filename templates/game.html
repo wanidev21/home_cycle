@@ -293,6 +293,13 @@ body.portrait-touch #rotateHint { display: flex; }
 #board .pos { font-family: var(--num); color: var(--muted); width: 12px; }
 #board i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 #board span.gap { margin-left: auto; color: var(--muted); font-size: 13px; font-family: var(--num); }
+/* 캔버스(#game)와 같은 층에 두되 그 아래. z-index:-1로 두면 body 배경 뒤로 숨어 검게 보인다 */
+#ride {
+  position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  background: #000; z-index: 0; display: none;
+}
+canvas#game { z-index: 1; }
+#ride.on { display: block; }
 #mirror {
   position: absolute; left: 18px; bottom: 210px; width: 164px; height: 82px;
   border-radius: 50%; border: 2px solid rgba(255,255,255,0.3);
@@ -404,6 +411,7 @@ html.fx-on .overlay { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(
 </svg>
 
 <canvas id="game3d" class="hidden"></canvas>
+<video id="ride" muted playsinline loop preload="auto"></video>
 <canvas id="game"></canvas>
 
 <!-- 메인 메뉴 -->
@@ -438,6 +446,10 @@ html.fx-on .overlay { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(
         <span class="icon"><svg><use href="#i-bolt"/></svg></span><span class="go"><svg><use href="#i-arrow"/></svg></span>
         <span class="t">아케이드 레이스</span><span class="d">라이벌 5명 · 아이템 · 코인</span>
       </button>
+      <button class="mode" id="btnVideo">
+        <span class="icon"><svg><use href="#i-bike"/></svg></span><span class="go"><svg><use href="#i-arrow"/></svg></span>
+        <span class="t">🎥 영상 라이딩</span><span class="d">직접 찍은 길을 내 속도로</span>
+      </button>
     </div>
     <div class="subnav">
       <button class="btn" id="btnRecords"><svg class="ico"><use href="#i-list"/></svg>기록</button>
@@ -469,6 +481,14 @@ html.fx-on .overlay { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(
 </section>
 
 <!-- 기록 -->
+<section class="screen" id="v-video">
+  <div class="wrap">
+    <div class="pagehead"><button class="back" data-back><svg><use href="#i-back"/></svg></button><h2>🎥 영상 라이딩</h2></div>
+    <p class="sub" id="videoHint">촬영한 길을 내 페달 속도로 재생합니다. 멈추면 영상도 멈춰요.</p>
+    <div class="ach" id="videoCards"></div>
+  </div>
+</section>
+
 <section class="screen" id="v-records">
   <div class="wrap">
     <div class="pagehead"><button class="back" data-back><svg><use href="#i-back"/></svg></button><h2>기록</h2></div>
@@ -646,6 +666,7 @@ function show(v) {
   if (v === "menu") loadMenu();
   if (v === "stages") loadStages("stageCards", false);
   if (v === "arcade") loadStages("arcadeCards", true);
+  if (v === "video") loadVideoCourses();
   if (v === "records") loadRecords();
   if (v === "achievements") loadAchievements();
 }
@@ -666,6 +687,7 @@ function userGesture() {
 $("btnFree").addEventListener("click", () => { userGesture(); send({ command: "start_free" }); });
 $("btnStages").addEventListener("click", () => show("stages"));
 $("btnArcade").addEventListener("click", () => show("arcade"));
+$("btnVideo").addEventListener("click", () => show("video"));
 $("btnRecords").addEventListener("click", () => show("records"));
 $("btnAch").addEventListener("click", () => show("achievements"));
 $("btnResume").addEventListener("click", () => { userGesture(); send({ command: "resume" }); });
@@ -2445,6 +2467,64 @@ function drawMirror() {
   }
 }
 
+// --- 영상 라이딩 ---
+// 촬영 속도 대비 내 속도만큼 재생 속도를 바꾼다. 멈추면 영상도 선다.
+// 브라우저가 매끄럽게 재생하는 배속은 대략 0.25~2.0이라 (촬영 20km/h 기준) 5~40km/h를 덮는다.
+const RATE_MIN = 0.25, RATE_MAX = 2.0, RIDE_STOP_KMH = 1.0;
+let videoCourse = null;      // {url, name, filmed_kmh}
+let videoStarted = false;
+function videoOn() { return !!videoCourse; }
+
+function startVideoRide(course) {
+  videoCourse = course;
+  videoStarted = false;
+  const v = $("ride");
+  v.src = course.url;
+  v.classList.add("on");
+  $("game3d").classList.add("hidden");
+  v.play().catch(() => { /* 사용자 제스처 전이면 무시 — 시작 버튼에서 다시 부른다 */ });
+  send({ command: "start_free" });
+}
+function stopVideoRide() {
+  videoCourse = null;
+  const v = $("ride");
+  v.pause(); v.removeAttribute("src"); v.load();
+  v.classList.remove("on");
+  if (window.R3D && R3D.on) $("game3d").classList.remove("hidden");
+}
+function updateVideo() {
+  if (!videoCourse) return;
+  // 시작 직후 한두 프레임은 서버가 아직 "waiting"이다 — 바로 껐다가 켜지지 않게
+  // 한 번이라도 playing을 본 뒤부터 종료를 판단한다.
+  if (S.state === "playing") videoStarted = true;
+  else if (videoStarted) { stopVideoRide(); return; }
+  const v = $("ride");
+  const moving = disp.speed > RIDE_STOP_KMH && S.state === "playing";
+  if (!moving) { if (!v.paused) v.pause(); return; }
+  if (v.paused) v.play().catch(() => {});
+  v.playbackRate = clamp(disp.speed / videoCourse.filmed_kmh, RATE_MIN, RATE_MAX);
+}
+
+async function loadVideoCourses() {
+  const list = await api("/api/videos");
+  if (!list.length) {
+    $("videoCards").innerHTML = `<div class="card"><div class="emo">🎬</div><div>
+      <h3>아직 영상이 없어요</h3>
+      <div class="meta">촬영한 mp4 파일을 <b>static/video/</b> 폴더에 넣으면 여기에 나옵니다.</div>
+      <div class="meta">같은 폴더의 courses.json에 촬영 속도(filmed_kmh)를 적어주세요.</div></div></div>`;
+    return;
+  }
+  $("videoCards").innerHTML = list.map((c, i) => `<div class="card" data-i="${i}">
+      <div class="emo">🎥</div>
+      <div><h3>${c.name}</h3>
+      <div class="meta">촬영 속도 ${c.filmed_kmh}km/h · ${c.size_mb}MB</div>
+      <div class="meta">${c.note || ""}</div></div>
+    </div>`).join("");
+  for (const el of $("videoCards").children) {
+    el.addEventListener("click", () => { userGesture(); startVideoRide(list[+el.dataset.i]); });
+  }
+}
+
 let lastBoard = "";
 function updateArcadeHud() {
   const a = S.arcade;
@@ -2599,7 +2679,9 @@ function step(now, dt) {
   }
   if (view !== "game") { ambientDist += 5 * dt; disp.angle += Math.PI * 2 * dt; }
 
-  if (window.R3D && R3D.on) R3D.render(dt, now); else render(dt, now);
+  if (videoOn()) { ctx.clearRect(0, 0, W, H); updateVideo(); }
+  else if (window.R3D && R3D.on) R3D.render(dt, now);
+  else render(dt, now);
   drawMirror();
   // FPS (3D일 때만 표시: 태블릿 성능 확인용)
   fpsFrames++;

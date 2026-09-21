@@ -3,3 +3,6 @@ __pycache__/
 .pytest_cache/
 *.pyc
 *.zip
+
+# 촬영 영상은 용량이 커서 저장소에 넣지 않는다 (courses.json만 추적)
+static/video/*.mp4
