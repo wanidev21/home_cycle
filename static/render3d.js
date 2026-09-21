@@ -6,9 +6,13 @@ import * as THREE from "./vendor/three.module.min.js";
 
 THREE.ColorManagement.enabled = false;   // 색 값을 2D와 똑같이 (sRGB 그대로)
 
-const N = 170;           // 버퍼가 감당하는 최대 도로 세그먼트 수 (≈510m)
+// PC(마우스)와 태블릿(터치)은 성능 차이가 수십 배라 같은 설정을 쓸 이유가 없다.
+// 태블릿용으로 깎아둔 값(안티앨리어싱 없음·저해상도·무광 바닥)이 "그래픽이 후지다"의 큰 원인이었다.
+const HIGH = !(typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches);
+const N = HIGH ? 260 : 170;   // 버퍼가 감당하는 최대 도로 세그먼트 수 (PC ≈780m, 태블릿 ≈510m)
 const N_MIN = 80;        // 저사양에서 줄일 수 있는 하한 (≈240m)
 const FOG_NEAR = 40;
+const SHADOW_SPAN = 45;   // m. 그림자를 드리우는 반경 (앞쪽 위주)
 const FOG_SPAN = 0.92;   // 안개 끝 = 그리는 거리 × 이 비율 (끊긴 데가 안 보이게)
 // 태블릿(PowerVR GE8320)마다 성능이 달라 미리 정할 수 없다 → 실제 프레임 시간을 보고 조절한다.
 const FPS_TARGET_LOW = 27, FPS_TARGET_HIGH = 45;
@@ -31,12 +35,12 @@ const T3 = {
   city: {
     sky: ["#3d7cc4", "#87ceeb", "#d4ecf6"], ground: ["#9fb596", "#98ae8f"], verge: ["#b8bcbe", "#b1b5b7"],
     road: ["#555a61", "#52575e"], edge: "#f2f2ec", lane: "#f2cc55", sun: "#fff3da", sunI: 1.0, hemi: ["#d6ecff", "#7d8a74"], hemiI: 0.85,
-    dir: [-20, 95, 25], fog: 1.15,     // 정오
+    dir: [-42, 58, 30], fog: 1.15,     // 한낮이되 해를 45°쯤으로 — 수직이면 그림자가 건물 밑에 깔려 안 보인다
   },
   suburb: {
     sky: ["#3f86d0", "#87ceeb", "#dcf1f8"], ground: ["#a8d08d", "#a0c886"], verge: ["#8dbe74", "#87b76e"],
     road: ["#555a60", "#52575d"], edge: "#f4f4ee", lane: "#f2cc55", sun: "#fff3da", sunI: 0.95, hemi: ["#d6ecff", "#6f8a5f"], hemiI: 0.9,
-    dir: [-65, 70, 40], fog: 1.15,     // 오후, 좌상 45°
+    dir: [-70, 46, 38], fog: 1.15,     // 오후, 좌상 낮게
   },
   mountain: {   // 노을
     sky: ["#4a4b8c", "#ff8a5c", "#ffc79c"], ground: ["#8b5a2b", "#855628"], verge: ["#a7896a", "#a08365"],
@@ -59,7 +63,7 @@ for (const t of Object.values(T3)) t.fog = hexRgb(t.sky[2]);
 
 let renderer, scene, camera, fog, hemi, sun, cockpit, gauge, gaugeCtx, gaugeTex;
 let hands = [];
-let terrain, tPos, tCol, tUv, finishMesh;
+let terrain, tPos, tCol, tUv, tNrm, finishMesh;
 let bgCanvas, bgCtx, bgTex, bgKey = "";
 const inst = {};
 const xs = new Float32Array(N + 2), ys = new Float32Array(N + 2), zs = new Float32Array(N + 2);
@@ -253,11 +257,12 @@ const SHADOW_R = {
   bld0: 5.5, bld1: 7.5, bld2: 4.5,
 };
 
-function addInstanced(name, geo, mat, cap) {
+function addInstanced(name, geo, mat, cap, shadow = true) {
   const m = new THREE.InstancedMesh(geo, mat, cap);
   m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   m.frustumCulled = false;
   m.count = 0;
+  if (HIGH && shadow) m.castShadow = true;
   scene.add(m);
   inst[name] = m;
   return m;
@@ -386,7 +391,7 @@ function updateGauge(dt) {
 // 초기화
 // ---------------------------------------------------------------------
 function init(canvas) {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: HIGH, powerPreference: "high-performance" });
   // 컨텍스트를 잃으면 그리기를 멈추고 2D에게 넘긴다 (기본 렌더러라 멈추면 게임이 끝난다)
   canvas.addEventListener("webglcontextlost", (e) => {
     e.preventDefault();
@@ -394,6 +399,10 @@ function init(canvas) {
     if (typeof window.onGfxLost === "function") window.onGfxLost();
   });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+  if (HIGH) {
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  }
   scene = new THREE.Scene();
   fog = new THREE.Fog(0xd4ecf6, FOG_NEAR, 470);
   scene.fog = fog;
@@ -405,6 +414,21 @@ function init(canvas) {
   sun = new THREE.DirectionalLight(0xfff3da, 1.5);
   sun.position.set(-50, 70, 60);   // 카메라 뒤 왼쪽 위 → 보이는 면이 밝게 (하늘의 해는 연출용)
   scene.add(hemi, sun);
+  if (HIGH) {
+    // 그림자를 온 세상에 드리우면 맵 해상도가 흩어져 뭉개진다.
+    // 눈에 보이는 앞쪽 SHADOW_SPAN 미터만 덮고, 카메라를 따라다니게 한다.
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    const c = sun.shadow.camera;
+    c.left = -SHADOW_SPAN; c.right = SHADOW_SPAN;
+    c.top = SHADOW_SPAN; c.bottom = -SHADOW_SPAN;
+    c.near = 1; c.far = SHADOW_SPAN * 6;
+    // 이걸 빼먹으면 기본값(±5m) 투영이 그대로 남아 그림자가 코앞 손바닥만 한 데만 떨어진다
+    c.updateProjectionMatrix();
+    sun.shadow.bias = -0.0012;
+    sun.shadow.normalBias = 0.05;
+    scene.add(sun.target);
+  }
   // 콕핏에도 빛이 닿도록 카메라에 약한 조명
   const fill = new THREE.DirectionalLight(0xffffff, 1.4);
   fill.position.set(-0.5, 1, 0.5);
@@ -415,15 +439,20 @@ function init(canvas) {
   tPos = new Float32Array(quads * 6 * 3);
   tCol = new Float32Array(quads * 6 * 3);
   tUv = new Float32Array(quads * 6 * 2);
+  tNrm = HIGH ? new Float32Array(quads * 6 * 3) : null;
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(tPos, 3).setUsage(THREE.DynamicDrawUsage));
   geo.setAttribute("color", new THREE.BufferAttribute(tCol, 3).setUsage(THREE.DynamicDrawUsage));
   geo.setAttribute("uv", new THREE.BufferAttribute(tUv, 2).setUsage(THREE.DynamicDrawUsage));
-  terrain = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-    map: grainTexture(), vertexColors: true, depthWrite: false, depthTest: false,
-  }));
+  if (tNrm) geo.setAttribute("normal", new THREE.BufferAttribute(tNrm, 3).setUsage(THREE.DynamicDrawUsage));
+  // PC: 빛을 받고 깊이 버퍼를 쓰는 바닥. 겹쳐 그리는 층(땅/갓길/도로/차선)은 y를 조금씩
+  // 띄워 z-파이팅을 피한다. 태블릿: 예전처럼 무광 + 먼 곳부터 덧칠(깊이 버퍼 안 씀).
+  terrain = new THREE.Mesh(geo, HIGH
+    ? new THREE.MeshLambertMaterial({ map: grainTexture(), vertexColors: true })
+    : new THREE.MeshBasicMaterial({ map: grainTexture(), vertexColors: true, depthWrite: false, depthTest: false }));
   terrain.frustumCulled = false;
   terrain.renderOrder = -10;
+  if (HIGH) terrain.receiveShadow = true;
   scene.add(terrain);
 
   // 결승선 체크무늬
@@ -471,8 +500,9 @@ function init(canvas) {
   const shadowGeo = new THREE.CircleGeometry(1, 10);
   shadowGeo.rotateX(-Math.PI / 2);
   shadowGeo.scale(1, 1, 0.42);              // 위에서 비스듬히 보므로 앞뒤로 납작하게
-  const sh = addInstanced("shadow", shadowGeo, shadowMat, 460);
+  const sh = addInstanced("shadow", shadowGeo, shadowMat, 460, false);
   sh.renderOrder = -5;
+  sh.visible = !HIGH;      // PC에서는 진짜 그림자가 대신한다
 
   addInstanced("riderKit", makeRiderKit(), lambert(), 8);
   addInstanced("riderBody", makeRiderBody(), lambert(), 8);
@@ -488,7 +518,7 @@ function resize() {
   if (!renderer) return;
   const coarse = COARSE;
   // 저사양 태블릿(PowerVR GE8320) 대비: 터치 기기는 0.75배 해상도로 그리고 늘림
-  renderer.setPixelRatio(coarse ? PIXEL_STEPS[pixelStep] : Math.min(window.devicePixelRatio || 1, 1.25));
+  renderer.setPixelRatio(coarse ? PIXEL_STEPS[pixelStep] : Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(W, H, false);
   camera.aspect = W / H;
   camera.updateProjectionMatrix();
@@ -585,6 +615,12 @@ const UV_SCALE = 7.5;      // m 당 텍스처 1칸. 얼룩 하나가 대략 0.5~
 function quadAt(xL1, xR1, y1, z1, xL2, xR2, y2, z2, c, uL, uR, v1, v2) {
   const o = qi * 18, o2 = qi * 12;
   const P = tPos, C = tCol, U = tUv;
+  if (tNrm) {   // 경사를 따라 기운 법선 → 오르막·내리막이 빛을 다르게 받는다
+    const dy = y2 - y1, dz = z2 - z1;
+    const len = Math.hypot(dz, dy) || 1;
+    const ny = Math.abs(dz) / len, nz = dy / len;
+    for (let k = 0; k < 6; k++) { tNrm[o + k * 3] = 0; tNrm[o + k * 3 + 1] = ny; tNrm[o + k * 3 + 2] = nz; }
+  }
   // 두 삼각형: (L1,R1,R2) (L1,R2,L2)
   P[o] = xL1; P[o + 1] = y1; P[o + 2] = z1;   P[o + 3] = xR1; P[o + 4] = y1; P[o + 5] = z1;   P[o + 6] = xR2; P[o + 7] = y2; P[o + 8] = z2;
   P[o + 9] = xL1; P[o + 10] = y1; P[o + 11] = z1; P[o + 12] = xR2; P[o + 13] = y2; P[o + 14] = z2; P[o + 15] = xL2; P[o + 16] = y2; P[o + 17] = z2;
@@ -622,6 +658,7 @@ function adaptQuality(dt, now) {
 }
 
 let fogMul = 1;
+let lightLocked = false;   // tuneShadow로 직접 만질 때만 true
 function setFog() {
   fog.near = FOG_NEAR;
   fog.far = Math.max(120, drawN * SEG * FOG_SPAN * fogMul);
@@ -644,11 +681,28 @@ function render(dt, now) {
   const fogC = mix(tp.fog, tc.fog, themeFade);
   fog.color.setRGB(fogC[0] / 255, fogC[1] / 255, fogC[2] / 255);
   // 최신 Three.js는 빛을 물리 단위로 계산(÷π) → 예전 세기의 약 π배
-  hemi.color.set(tc.hemi[0]); hemi.groundColor.set(tc.hemi[1]); hemi.intensity = tc.hemiI * 2.4;
-  sun.color.set(tc.sun); sun.intensity = tc.sunI * 1.6;
+  hemi.color.set(tc.hemi[0]); hemi.groundColor.set(tc.hemi[1]);
+  // 그림자가 생긴 뒤로는 비율이 중요하다. 예전 값(주변광이 직사광의 2.5배)은 그림자 없는
+  // 세상 기준이라, 그림자가 지워지는 게 아니라 주변광에 씻겨 안 보였다.
+  // 바깥 햇빛은 직사광이 주변광의 2~3배다.
+  if (!lightLocked) {
+    hemi.intensity = tc.hemiI * (HIGH ? 1.25 : 2.4);
+    sun.intensity = tc.sunI * (HIGH ? 2.0 : 1.6);
+  }
+  sun.color.set(tc.sun);
   // 해 방향도 테마마다 다르다 — 방향이 하나면 노을 팔레트여도 정오처럼 보인다
   const d0 = tp.dir || tc.dir, d1 = tc.dir;
-  sun.position.set(lerp(d0[0], d1[0], themeFade), lerp(d0[1], d1[1], themeFade), lerp(d0[2], d1[2], themeFade));
+  const sx = lerp(d0[0], d1[0], themeFade), sy = lerp(d0[1], d1[1], themeFade), sz = lerp(d0[2], d1[2], themeFade);
+  if (HIGH && sun.castShadow) {
+    // 그림자 카메라는 "앞쪽 30m"를 중심으로 따라다닌다. 빛의 방향은 유지하되
+    // 위치만 그 중심 기준으로 옮겨야 앞을 달려도 그림자가 끊기지 않는다.
+    const cz = -30, k = SHADOW_SPAN * 2 / Math.hypot(sx, sy, sz);
+    sun.target.position.set(0, 0, cz);
+    sun.target.updateMatrixWorld();
+    sun.position.set(sx * k, sy * k, cz + sz * k);
+  } else {
+    sun.position.set(sx, sy, sz);
+  }
   fogMul = lerp(tp.fog ?? 1, tc.fog ?? 1, themeFade);
   setFog();
   baseIdx = Math.floor(camZ / SEG);
@@ -683,8 +737,12 @@ function render(dt, now) {
     const st = mod(Math.floor(idx / 3), 2);
     const x1 = xs[n], y1 = ys[n], z1 = Math.min(zs[n], 0.5), x2 = xs[n + 1], y2 = ys[n + 1], z2 = zs[n + 1];
     const va = (idx * SEG) / UV_SCALE, vb = va + SEG / UV_SCALE;
-    const Q = (l, r, c) => quadAt(x1 + l, x1 + r, y1, z1, x2 + l, x2 + r, y2, z2, c,
-                                  l / UV_SCALE, r / UV_SCALE, va, vb);
+    let lift = 0;   // 같은 높이에 겹쳐 그리는 층들이 깊이 버퍼에서 싸우지 않게
+    const Q = (l, r, c) => {
+      const dy = HIGH ? (lift += 0.004) : 0;
+      quadAt(x1 + l, x1 + r, y1 + dy, z1, x2 + l, x2 + r, y2 + dy, z2, c,
+             l / UV_SCALE, r / UV_SCALE, va, vb);
+    };
     Q(-400, 400, c01(t.ground[st]));
     Q(-RW * 1.32, RW * 1.32, c01(t.verge[st]));
     Q(-RW, RW, c01(t.road[st]));
@@ -697,6 +755,10 @@ function render(dt, now) {
   terrain.geometry.attributes.position.updateRanges = [{ start: 0, count: qi * 6 * 3 }];
   terrain.geometry.attributes.color.updateRanges = [{ start: 0, count: qi * 6 * 3 }];
   terrain.geometry.attributes.uv.updateRanges = [{ start: 0, count: qi * 6 * 2 }];
+  if (tNrm) {
+    terrain.geometry.attributes.normal.updateRanges = [{ start: 0, count: qi * 6 * 3 }];
+    terrain.geometry.attributes.normal.needsUpdate = true;
+  }
   terrain.geometry.attributes.position.needsUpdate = true;
   terrain.geometry.attributes.color.needsUpdate = true;
   terrain.geometry.attributes.uv.needsUpdate = true;
@@ -752,6 +814,7 @@ function jitter(seed, color) {
   return col;
 }
 function putShadow(px, py, pz, r) {
+  if (HIGH) return;        // 진짜 그림자가 있으면 가짜 타원은 겹쳐서 지저분해진다
   const m = inst.shadow;
   if (cnt.shadow >= m.instanceMatrix.count) return;
   q.setFromAxisAngle(up, 0);
@@ -1053,4 +1116,31 @@ function drawOverlay(dt, now, fp, cam, fx) {
 
 // drawDist: 지금 그리는 거리(m). HUD가 매 초 읽어 표시한다.
 window.R3D = { init, render, resize, on: false, drawDist: 0,   // init()의 setFog()가 채운다
-  quality: () => ({ drawN, pixelStep, fps: Math.round(1000 / frameMs) }) };
+  quality: () => ({ drawN, pixelStep, fps: Math.round(1000 / frameMs) }),
+  tuneShadow: (o = {}) => {                 // 원인 좁히기용 임시 손잡이
+    if (!sun || !sun.castShadow) return "no shadow";
+    if (o.bias !== undefined) sun.shadow.bias = o.bias;
+    if (o.normalBias !== undefined) sun.shadow.normalBias = o.normalBias;
+    if (o.hemi !== undefined) { hemi.intensity = o.hemi; lightLocked = true; }
+    if (o.sun !== undefined) { sun.intensity = o.sun; lightLocked = true; }
+    if (o.span !== undefined) {
+      const c = sun.shadow.camera;
+      c.left = -o.span; c.right = o.span; c.top = o.span; c.bottom = -o.span;
+      c.updateProjectionMatrix();
+    }
+    sun.shadow.needsUpdate = true;
+    return { bias: sun.shadow.bias, normalBias: sun.shadow.normalBias, span: sun.shadow.camera.right };
+  },
+  debug: () => ({
+    high: HIGH,
+    shadowMap: renderer && renderer.shadowMap.enabled,
+    sunCast: sun && sun.castShadow,
+    sunPos: sun && sun.position.toArray().map((v) => Math.round(v)),
+    sunTarget: sun && sun.target.position.toArray().map((v) => Math.round(v)),
+    terrainReceives: terrain && terrain.receiveShadow,
+    casters: Object.entries(inst).filter(([, m]) => m.castShadow && m.count > 0).map(([k, m]) => k + ":" + m.count),
+    shadowCam: sun && sun.castShadow ? [sun.shadow.camera.left, sun.shadow.camera.right,
+      sun.shadow.camera.top, sun.shadow.camera.bottom, sun.shadow.camera.near, sun.shadow.camera.far] : null,
+    shadowMapMade: !!(sun && sun.shadow && sun.shadow.map),
+    projScale: sun && sun.shadow ? Math.round(1 / sun.shadow.camera.projectionMatrix.elements[0]) : null,
+  }) };
