@@ -602,6 +602,7 @@ html.fx-on .overlay { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(
 <div id="rotateHint">태블릿을 가로로 돌려주세요</div>
 
 <script src="/static/nosleep.min.js"></script>
+<script src="/static/cockpit.js"></script>
 <script>const MOCK = {{ 'true' if mock else 'false' }};</script>
 {% raw %}
 <script>
@@ -2128,138 +2129,8 @@ function drawSprites(idx, s, m) {
   }
 }
 
-// =====================================================================
-// 1인칭 시점: 핸들바 + 손 + 앞바퀴 + 페달 박자에 맞춰 올라오는 무릎
-// =====================================================================
-let gripT = 0;        // 0 = 후드 그립, 1 = 바 탑 그립 (오르막). 급변하면 손이 튀어서 서서히 옮긴다
-function drawCockpit(now, o) {
-  const u = Math.min(H, W * 0.62) / 100;          // 화면 크기 기준 단위
-  const climbing = o.standing;
-  gripT += ((climbing ? 1 : 0) - gripT) * 0.06;
-  const sway = Math.sin(disp.angle) * (climbing ? 1.4 : 0.5) * u;
-  const buzz = disp.speed > 3 ? Math.sin(now / 23) * Math.sin(now / 37) * clamp(disp.speed / 40, 0, 1) * 0.35 * u : 0;
-  const cx = W / 2 + sway, by = H + buzz;          // 기준점: 화면 아래 가운데
-  const tape = o.rainbow ? `hsl(${(now / 4) % 360},90%,55%)` : "#1a1c20";
-  ctx.save();
-  ctx.lineCap = "round"; ctx.lineJoin = "round";
-
-  // 앞바퀴 (타이어 무늬가 속도에 맞춰 흘러감)
-  const ty = by - 17 * u, tr = 4.2 * u;
-  ctx.fillStyle = "#16181b";
-  ctx.beginPath(); ctx.ellipse(cx, by + 6 * u, tr, 24 * u, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.save();
-  ctx.beginPath(); ctx.ellipse(cx, by + 6 * u, tr, 24 * u, 0, 0, Math.PI * 2); ctx.clip();
-  ctx.fillStyle = "rgba(255,255,255,0.08)";
-  const tread = mod(disp.dist * 40, 3.2) * u;
-  for (let yy = ty - 4 * u + tread; yy < by; yy += 3.2 * u) ctx.fillRect(cx - tr * 0.6, yy, tr * 1.2, 0.8 * u);
-  ctx.fillStyle = "rgba(255,255,255,0.1)";
-  ctx.fillRect(cx - tr * 0.75, ty - 6 * u, tr * 0.25, 30 * u);   // 옆면 하이라이트
-  ctx.restore();
-
-  // 무릎: 크랭크 각도로 번갈아 올라옴 (실제 RPM과 같은 박자)
-  for (const side of [-1, 1]) {
-    const a = disp.angle + (side < 0 ? 0 : Math.PI);
-    const lift = (1 - Math.cos(a)) / 2;                    // 0(아래) ~ 1(위)
-    const ky = by + 10 * u - lift * 24 * u, kx = cx + side * (13 + lift * 2) * u;
-    ctx.fillStyle = o.skin;                                 // 무릎 (허벅지 끝)
-    ctx.beginPath(); ctx.ellipse(kx, ky + 1.5 * u, 6.2 * u, 3 * u, 0, Math.PI, 0);
-    ctx.lineTo(kx + 6.4 * u, ky + 4 * u); ctx.lineTo(kx - 6.4 * u, ky + 4 * u); ctx.fill();
-    ctx.fillStyle = o.shorts;                               // 허벅지 (반바지)
-    ctx.beginPath();
-    ctx.moveTo(kx - 6.6 * u, ky + 3.6 * u); ctx.lineTo(kx + 6.6 * u, ky + 3.6 * u);
-    ctx.lineTo(kx + side * 3 * u + 9 * u, by + 26 * u); ctx.lineTo(kx + side * 3 * u - 9 * u, by + 26 * u); ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
-    ctx.fillRect(kx - side * 4.5 * u - 1 * u, ky + 4 * u, 2 * u, 20 * u);
-    ctx.fillStyle = "rgba(0,0,0,0.12)";
-    ctx.beginPath(); ctx.ellipse(kx + side * 2.5 * u, ky + 1.8 * u, 2.6 * u, 1.4 * u, 0, 0, Math.PI * 2); ctx.fill();
-  }
-
-  // 탑튜브 + 헤드튜브 + 스템
-  ctx.fillStyle = o.frame;
-  ctx.beginPath();
-  ctx.moveTo(cx - 2.2 * u, by - 27 * u); ctx.lineTo(cx + 2.2 * u, by - 27 * u);
-  ctx.lineTo(cx + 3.6 * u, by + 1 * u); ctx.lineTo(cx - 3.6 * u, by + 1 * u); ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.12)";
-  ctx.fillRect(cx - 1.8 * u, by - 26 * u, 0.9 * u, 26 * u);
-  ctx.fillStyle = "#1d2025";
-  ctx.beginPath();
-  ctx.moveTo(cx - 2 * u, by - 34 * u); ctx.lineTo(cx + 2 * u, by - 34 * u);
-  ctx.lineTo(cx + 2.8 * u, by - 24 * u); ctx.lineTo(cx - 2.8 * u, by - 24 * u); ctx.fill();
-
-  // 핸들바: 탑 → 앞으로 휘어 후드(브레이크 레버)
-  const barY = by - 30 * u;
-  ctx.strokeStyle = tape; ctx.lineWidth = 2.4 * u;
-  ctx.beginPath();
-  ctx.moveTo(cx - 22 * u, barY - 3 * u);
-  ctx.quadraticCurveTo(cx - 20 * u, barY + 1.2 * u, cx - 12 * u, barY + 0.8 * u);
-  ctx.lineTo(cx + 12 * u, barY + 0.8 * u);
-  ctx.quadraticCurveTo(cx + 20 * u, barY + 1.2 * u, cx + 22 * u, barY - 3 * u);
-  ctx.stroke();
-  ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.lineWidth = 0.6 * u;
-  ctx.beginPath(); ctx.moveTo(cx - 12 * u, barY); ctx.lineTo(cx + 12 * u, barY); ctx.stroke();
-  // 스템 클램프
-  ctx.fillStyle = "#2a2e35";
-  ctx.fillRect(cx - 2.6 * u, barY - 1.8 * u, 5.2 * u, 4.4 * u);
-
-  // 속도계 (스템 앞 마운트)
-  const gw = 13 * u, gh = 6.6 * u, gy = barY - 9.8 * u;
-  ctx.fillStyle = "#23272e"; ctx.fillRect(cx - 1 * u, gy + gh - 0.5 * u, 2 * u, 4 * u);
-  ctx.fillStyle = "#121418";
-  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(cx - gw / 2, gy, gw, gh, 1.2 * u) : ctx.rect(cx - gw / 2, gy, gw, gh); ctx.fill();
-  ctx.fillStyle = "#c9d6c4";
-  ctx.fillRect(cx - gw / 2 + 0.8 * u, gy + 0.8 * u, gw - 1.6 * u, gh - 1.6 * u);
-  ctx.fillStyle = "#1b2219"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = `700 ${Math.round(3.3 * u)}px ${NUM_FONT}`;
-  ctx.fillText(disp.speed.toFixed(1), cx - 1.6 * u, gy + gh * 0.52);
-  ctx.font = `600 ${Math.round(1.25 * u)}px system-ui`;
-  ctx.fillText("km/h", cx + 4 * u, gy + gh * 0.72);
-
-  // 팔 (화면 아래 바깥에서 후드로) + 장갑
-  for (const s of [-1, 1]) {
-    // 오르막에서는 후드(바깥·앞)에서 바 탑(안쪽)으로 손을 옮긴다 — 실제로 언덕에선 탑을 잡는다
-    const hx = cx + s * lerp(21, 13.5, gripT) * u, hy = barY - lerp(2.2, 0.6, gripT) * u;
-    // 페달 박자에 맞춰 팔꿈치가 미세하게 벌어졌다 모인다 (좌우 반대 위상)
-    const tense = Math.sin(disp.angle + (s < 0 ? 0 : Math.PI)) * clamp(disp.rpm / 100, 0, 1);
-    const ex = cx + s * (33 + tense * 0.9) * u, ey = by - (4 + tense * 0.5) * u;   // 팔꿈치 (가까워서 크게)
-    const sx = cx + s * 44 * u, sy = by + 16 * u;              // 어깨 쪽 (화면 밖)
-    // 팔뚝: 팔꿈치 쪽이 굵고 손목 쪽이 가는 사다리꼴 (원근)
-    const nx = -(hy - ey), ny = hx - ex, nl = Math.hypot(nx, ny);
-    const px = nx / nl, py = ny / nl;
-    ctx.fillStyle = o.skin;
-    ctx.beginPath();
-    ctx.moveTo(ex + px * 6.5 * u, ey + py * 6.5 * u); ctx.lineTo(hx + px * 3 * u, hy + py * 3 * u);
-    ctx.lineTo(hx - px * 3 * u, hy - py * 3 * u); ctx.lineTo(ex - px * 6.5 * u, ey - py * 6.5 * u); ctx.fill();
-    ctx.fillStyle = "rgba(0,0,0,0.13)";                        // 바깥쪽 그늘
-    const o2 = s > 0 ? 1 : -1;
-    ctx.beginPath();
-    ctx.moveTo(ex + px * 6.5 * u * o2, ey + py * 6.5 * u * o2); ctx.lineTo(hx + px * 3 * u * o2, hy + py * 3 * u * o2);
-    ctx.lineTo(hx + px * 1.2 * u * o2, hy + py * 1.2 * u * o2); ctx.lineTo(ex + px * 2.5 * u * o2, ey + py * 2.5 * u * o2); ctx.fill();
-    // 소매 (저지)
-    ctx.strokeStyle = o.jersey; ctx.lineWidth = 15 * u; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(lerp(sx, ex, 0.82), lerp(sy, ey, 0.82)); ctx.stroke();
-    ctx.strokeStyle = o.stripe; ctx.lineWidth = 15.2 * u; ctx.lineCap = "butt";
-    ctx.beginPath(); ctx.moveTo(lerp(sx, ex, 0.7), lerp(sy, ey, 0.7)); ctx.lineTo(lerp(sx, ex, 0.76), lerp(sy, ey, 0.76)); ctx.stroke();
-    ctx.lineCap = "round";
-    // 후드 + 장갑
-    ctx.fillStyle = "#15171a";
-    ctx.beginPath(); ctx.ellipse(hx + s * 0.4 * u, hy - 2.6 * u, 1.6 * u, 2.4 * u, s * 0.2, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = o.glove;
-    ctx.beginPath(); ctx.ellipse(hx, hy + 0.4 * u, 4.2 * u, 3.8 * u, s * 0.5, 0, Math.PI * 2); ctx.fill();
-    const grip = clamp((disp.speed - 18) / 22, 0, 1);         // 빠를수록 세게 쥔다
-    ctx.fillStyle = `rgba(${230 * grip | 0},${232 * grip | 0},${238 * grip | 0},${0.25 + 0.3 * grip})`;
-    for (const k of [-1, 0, 1]) { ctx.beginPath(); ctx.ellipse(hx + k * 1.4 * u - s * 0.8 * u, hy - 2.2 * u, 0.9 * u, 0.6 * u + 0.15 * grip * u, 0, 0, Math.PI * 2); ctx.fill(); }
-    ctx.fillStyle = "rgba(255,255,255,0.14)";
-    ctx.beginPath(); ctx.ellipse(hx - s * 1.2 * u, hy - 0.8 * u, 2 * u, 1.1 * u, s * 0.35, 0, Math.PI * 2); ctx.fill();
-  }
-
-  // 방어막: 화면 가장자리가 푸르게
-  if (o.bubble) {
-    const g = ctx.createRadialGradient(W / 2, H * 0.55, H * 0.35, W / 2, H * 0.55, W * 0.7);
-    g.addColorStop(0, "rgba(120,220,255,0)"); g.addColorStop(1, "rgba(120,220,255,0.35)");
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  }
-  ctx.restore();
-}
+// 1인칭 콕핏은 static/cockpit.js가 그린다 (애니메이션 스타일).
+// 2D·3D 공통이라 스타일을 바꿀 때 이 파일을 건드릴 필요가 없다.
 
 // =====================================================================
 // HUD

@@ -401,7 +401,7 @@ function init(canvas) {
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   if (HIGH) {
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;   // 0.186에서 PCFSoft는 제거됨
   }
   scene = new THREE.Scene();
   fog = new THREE.Fog(0xd4ecf6, FOG_NEAR, 470);
@@ -781,11 +781,9 @@ function render(dt, now) {
   finalizeInstances();
 
   // 콕핏
-  cockpit.visible = fp;
-  if (fp) {
-    updateHands(climbing);
-    updateGauge(dt);
-  }
+  // 1인칭 콕핏은 2D 애니메이션 오버레이(static/cockpit.js)가 그린다.
+  // 3D 메시까지 같이 그리면 핸들바·속도계가 두 번 나와 겹친다.
+  cockpit.visible = false;
 
   renderer.render(scene, camera);
   drawOverlay(dt, now, fp, cam, fx);
@@ -1106,10 +1104,9 @@ function drawOverlay(dt, now, fp, cam, fx) {
   }
   list.sort((a, b) => b.p.depth - a.p.depth);
   for (const it of list) it.draw(it.p);
-  if (fp && fx.shield) {
-    const g = ctx.createRadialGradient(W / 2, H * 0.55, H * 0.35, W / 2, H * 0.55, W * 0.7);
-    g.addColorStop(0, "rgba(120,220,255,0)"); g.addColorStop(1, "rgba(120,220,255,0.35)");
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  if (fp) {
+    drawCockpit(now, { ...ME, standing: factorAt(pos0) < 0.8 && disp.rpm > 0,
+                       rainbow: !!fx.star, bubble: !!fx.shield });
   }
   drawPost(dt, fx);
 }
