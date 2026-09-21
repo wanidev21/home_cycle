@@ -298,3 +298,13 @@ def test_riders_expose_attack_and_tired_flags():
     r.effects["turbo"] = 3.0          # 아이템 효과와 겹쳐도 각각 살아 있어야 한다
     row = race.riders()[0]
     assert row["effect"] == "turbo" and row["attacking"] is True
+
+
+def test_riders_send_persona_key_and_label():
+    """프론트엔드는 라벨("오르막 강자")로 스타일을 고를 수 없다 → 원본 키도 같이 보낸다."""
+    from pedalquest.arcade import PERSONAS
+    rows = make_race(stage_id=1).riders()
+    assert {r["persona_id"] for r in rows} <= set(PERSONAS)
+    assert len({r["persona_id"] for r in rows}) == 5, "5명이 서로 다른 성격이어야 실루엣이 갈린다"
+    for r in rows:
+        assert r["persona"] == PERSONAS[r["persona_id"]]["label"]

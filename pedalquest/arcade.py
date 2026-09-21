@@ -520,7 +520,9 @@ class ArcadeRace:
     def riders(self) -> list[dict]:
         return [{
             "id": r.id, "name": r.name, "kind": "ai", "color": r.color, "lane": r.lane,
-            "persona": PERSONA_LABEL[r.persona], "distance_m": round(r.distance, 1),
+            # persona = 화면에 쓰는 한글 라벨, persona_id = 스타일 분기용 원본 키
+            "persona": PERSONA_LABEL[r.persona], "persona_id": r.persona,
+            "distance_m": round(r.distance, 1),
             "rpm": round(r.rpm), "finished": r.finished_at is not None,
             "effect": ("slip" if "slip" in r.effects else
                        "turbo" if ("turbo" in r.effects or "pad" in r.effects) else None),

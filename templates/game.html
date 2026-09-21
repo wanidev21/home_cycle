@@ -1338,8 +1338,9 @@ function drawFinishArch(x, y, m, roadHalf) {
 
 // 라이더 (뒤에서 본 모습). angle = 크랭크 각도
 function drawRider(x, y, m, angle, o) {
+  m *= o.bodyScale || 1;                      // 성격별 체형 — 실루엣으로 구분되게
   const standing = o.standing ? 0.1 : 0;
-  const sway = Math.sin(angle) * (o.standing ? 0.06 : 0.02) * m;
+  const sway = Math.sin(angle) * (o.standing ? 0.06 : 0.02) * m * (o.swayMul || 1);
   ctx.save();
   ctx.globalAlpha = (o.alpha ?? 1) * (o.fade ? 0.65 : 1);
   ctx.lineCap = "round"; ctx.lineJoin = "round";
@@ -1381,7 +1382,7 @@ function drawRider(x, y, m, angle, o) {
 
   const crankY = y - 0.32 * m;
   const hipY = y - (0.98 + standing) * m;
-  const shY = y - (1.33 + standing) * m;
+  const shY = y - (1.33 + standing - (o.leanFwd || 0)) * m;   // leanFwd ↑ → 어깨가 내려와 웅크린 자세
   const bx = x + sway * 1.4;
   const handY = y - 1.1 * m;
 
@@ -1467,16 +1468,27 @@ function drawRider(x, y, m, angle, o) {
   // 목 + 헬멧
   ctx.fillStyle = o.skin;
   ctx.fillRect(bx - 0.045 * m, shY - 0.08 * m, 0.09 * m, 0.08 * m);
+  // 헬멧: aero=가로로 길고 뒤에 테일 / normal=납작 / round=기본
+  const aero = o.helmetStyle === "aero";
+  const hw = 0.14 * m * (aero ? 1.25 : 1), hh = 0.12 * m * (o.helmetStyle === "normal" ? 0.88 : 1);
+  const hy = shY - 0.12 * m;
   ctx.fillStyle = o.helmet;
-  ctx.beginPath(); ctx.ellipse(bx, shY - 0.12 * m, 0.14 * m, 0.12 * m, 0, 0, Math.PI * 2); ctx.fill();
+  if (aero) {                                  // 뒤로 뻗은 물방울 테일
+    ctx.beginPath();
+    ctx.moveTo(bx - hw * 0.5, hy + hh * 0.2);
+    ctx.lineTo(bx, hy + hh * 1.45);
+    ctx.lineTo(bx + hw * 0.5, hy + hh * 0.2);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.beginPath(); ctx.ellipse(bx, hy, hw, hh, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "rgba(0,0,0,0.16)";
-  ctx.beginPath(); ctx.ellipse(bx, shY - 0.12 * m, 0.14 * m, 0.12 * m, 0, 0.15 * Math.PI, 0.85 * Math.PI); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(bx, hy, hw, hh, 0, 0.15 * Math.PI, 0.85 * Math.PI); ctx.fill();
   ctx.fillStyle = "rgba(20,24,30,0.55)";  // 통풍구
-  for (const dx of [-0.07, 0, 0.07]) {
-    ctx.beginPath(); ctx.ellipse(bx + dx * m, shY - 0.15 * m, 0.018 * m, 0.05 * m, dx * 3, 0, Math.PI * 2); ctx.fill();
+  for (const dx of [-0.5, 0, 0.5]) {
+    ctx.beginPath(); ctx.ellipse(bx + dx * hw, hy - hh * 0.25, 0.018 * m, hh * 0.42, dx * 0.42, 0, Math.PI * 2); ctx.fill();
   }
   ctx.fillStyle = "rgba(255,255,255,0.35)";
-  ctx.beginPath(); ctx.ellipse(bx - 0.06 * m, shY - 0.2 * m, 0.04 * m, 0.02 * m, -0.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(bx - hw * 0.43, hy - hh * 0.67, 0.04 * m, 0.02 * m, -0.4, 0, Math.PI * 2); ctx.fill();
 
   // 후미등 (깜빡)
   if (o.light && Math.floor(performance.now() / 500) % 2 === 0) {
@@ -1556,13 +1568,24 @@ function drawDog(x, y, m) {
 }
 // 어택 = 주황 오라 + 스피드 라인, 지침 = 흐려지고 미세하게 흔들림 (사람 몸 연출은 쓰지 않는다)
 const ATTACK_COLOR = "#ffb060", TIRED_COLOR = "#8eb8d8";
+// 성격별 체형·자세·헬멧. 저지 색만으로는 다섯이 구별되지 않아 실루엣을 다르게 한다.
+// 키는 서버가 보내는 persona_id (라벨이 아님).
+const PERSONA_STYLE = {
+  climber:  { scale: 0.90, swayMul: 1.35, lean: 0.05, helmet: "aero" },    // 가볍고 많이 흔든다
+  sprinter: { scale: 1.10, swayMul: 0.75, lean: -0.02, helmet: "round" },  // 넓고 안정적
+  steady:   { scale: 1.00, swayMul: 1.00, lean: 0.00, helmet: "normal" },  // 표준
+  starter:  { scale: 0.95, swayMul: 1.15, lean: 0.09, helmet: "round" },   // 가장 웅크린 공격 자세
+  attacker: { scale: 1.04, swayMul: 1.25, lean: 0.07, helmet: "aero" },    // 크고 거칠게
+};
 function riderOpts(r) {
   const eff = r.effect, attacking = !!r.attacking, tired = !!r.tired;
+  const ps = PERSONA_STYLE[r.persona_id] || PERSONA_STYLE.steady;
   return {
     tire: "#1b1b1f", shorts: "#23263a", skin: "#d9a77f", shoe: "#ffffff", jersey: r.color, stripe: "#ffffff", helmet: r.color,
     label: (attacking ? "⚡ " : "") + r.name + (tired ? " 💨" : ""),
     labelColor: attacking ? ATTACK_COLOR : tired ? TIRED_COLOR : r.color,
     aura: attacking, fade: tired && !attacking, wobble: tired,
+    bodyScale: ps.scale, swayMul: ps.swayMul, leanFwd: ps.lean, helmetStyle: ps.helmet,
     flame: eff === "turbo",
     tilt: eff === "slip" ? Math.sin(performance.now() / 60) * 0.3 : 0, dizzy: eff === "slip",
   };
