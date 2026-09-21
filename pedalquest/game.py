@@ -1,6 +1,7 @@
 """게임 엔진: 모드, 관성 물리, 스테이지, 고스트."""
 import asyncio
 import time
+from datetime import datetime
 
 from . import achievements
 from .arcade import ArcadeRace, advance
@@ -126,6 +127,7 @@ class GameEngine:
         self.max_speed = 0.0
         self.rpm_time_sum = 0.0     # ∫rpm dt (페달링 중)
         self.pedal_time = 0.0
+        self.coast_time = 0.0       # 페달을 멈추고 있던 시간 (업적 "논스톱"용)
         self.session_log: list[float] = []
         self.stage_id: int | None = None
         self.auto_paused = False
@@ -246,6 +248,8 @@ class GameEngine:
         if rpm > 0:
             self.rpm_time_sum += rpm * dt
             self.pedal_time += dt
+        else:
+            self.coast_time += dt
         while len(self.session_log) < int(self.elapsed_sec):
             self.session_log.append(round(self.distance_m, 1))
 
@@ -299,7 +303,9 @@ class GameEngine:
         # log[i] = (i+1)초 시점 거리
         t = self.elapsed_sec
         i = int(t)
-        prev = log[i - 1] if 0 < i <= len(log) else 0.0
+        if i > len(log):        # 로그가 기록 길이보다 짧은 경우 (뒤로 튀는 것 방지)
+            return float(total)
+        prev = log[i - 1] if i > 0 else 0.0
         nxt = log[i] if i < len(log) else float(total)
         return min(float(total), prev + (nxt - prev) * (t - i))
 
@@ -341,13 +347,18 @@ class GameEngine:
             "finished": finished if (stage or self.race) else False,
             "coins": self.race.coins if self.race else None,
             "rank": self.race.rank() if (self.race and finished) else None,
-            "session_log": self.session_log if self.mode != "arcade" else [],
+            # 고스트는 "완주한 스테이지 기록"만 재생한다 → 나머지 로그는 저장하지 않는다
+            "session_log": self.session_log if (self.mode == "stage" and finished) else [],
         }
         saved = should_save(self.distance_m, self.elapsed_sec)
         new_achievements = []
         if saved:
             self.records.save_record(summary)
-            ids = achievements.check_session_end({**summary, "ghost_won": ghost_won}, self.records)
+            ids = achievements.check_session_end({
+                **summary, "ghost_won": ghost_won, "coast_time": round(self.coast_time, 1),
+                "items_used": race.items_used if race else 0,
+                "hour": datetime.now().hour,
+            }, self.records)
             new_achievements = achievements.unlock_new(self.records, ids)
 
         result = {k: v for k, v in summary.items() if k != "session_log"}

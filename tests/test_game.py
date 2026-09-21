@@ -113,3 +113,73 @@ def test_state_shape(env):
                 "terrain_factor", "theme", "stage", "riders", "heart_rate"):
         assert key in s
     assert s["stage"]["distance_m"] == STAGES[3]["distance_m"]
+
+
+# --- 확장 업적 / 고스트 로그 ---
+
+def test_free_ride_does_not_store_ghost_log(env):
+    game, sensor, records = env
+    game.start_free()
+    sensor.rpm = 80
+    run(game, 120)
+    game.stop()
+    row = records.conn.execute("SELECT session_log FROM records ORDER BY id DESC LIMIT 1").fetchone()
+    assert row["session_log"] == "[]", "프리 라이딩은 고스트가 없으므로 로그를 저장하지 않는다"
+
+
+def test_non_stop_achievement_needs_continuous_pedalling(env):
+    game, sensor, records = env
+    game.start_stage(4)
+    sensor.rpm = 110
+    run(game, 600)
+    assert game.state == "finished" and game.result["finished"]
+    assert "non_stop" in records.unlocked()
+
+
+def test_stopping_mid_stage_loses_non_stop(env):
+    game, sensor, records = env
+    game.start_stage(4)
+    sensor.rpm = 110
+    run(game, 60)
+    sensor.rpm = 0
+    run(game, 10)          # 쉼
+    sensor.rpm = 110
+    run(game, 600)
+    assert game.result["finished"]
+    assert "non_stop" not in records.unlocked()
+
+
+def test_time_of_day_achievements():
+    from pedalquest.achievements import check_session_end
+
+    class FakeRecords:
+        def streak_days(self): return 1
+        def stats(self): return {"total_distance_m": 0, "total_coins": 0}
+        def stage_bests(self): return {}
+
+    base = {"mode": "free", "elapsed_sec": 400, "avg_rpm": 70, "finished": False}
+    assert "early_bird" in check_session_end({**base, "hour": 6}, FakeRecords())
+    assert "night_owl" in check_session_end({**base, "hour": 23}, FakeRecords())
+    assert "night_owl" in check_session_end({**base, "hour": 1}, FakeRecords())
+    day = check_session_end({**base, "hour": 14}, FakeRecords())
+    assert "early_bird" not in day and "night_owl" not in day
+
+
+def test_grand_slam_needs_every_stage_three_starred():
+    from pedalquest.achievements import check_session_end
+
+    class FakeRecords:
+        def __init__(self, bests): self.bests = bests
+        def streak_days(self): return 1
+        def stats(self): return {"total_distance_m": 0, "total_coins": 0}
+        def stage_bests(self): return self.bests
+
+    summary = {"mode": "stage", "elapsed_sec": 400, "finished": True, "stars": 3, "coast_time": 99}
+    four = {i: {"best_stars": 3} for i in range(1, 5)}
+    assert "all_stages" not in check_session_end(summary, FakeRecords(four))
+    five = {i: {"best_stars": 3} for i in range(1, 6)}
+    ids = check_session_end(summary, FakeRecords(five))
+    assert "all_stages" in ids and "all_three_stars" in ids
+    mixed = {**five, 3: {"best_stars": 2}}
+    ids = check_session_end(summary, FakeRecords(mixed))
+    assert "all_stages" in ids and "all_three_stars" not in ids

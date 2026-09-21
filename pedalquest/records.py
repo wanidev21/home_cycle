@@ -75,9 +75,11 @@ class Records:
                 rec["mode"], rec.get("stage_id"), rec["distance_m"], rec["elapsed_sec"],
                 rec.get("avg_speed"), rec.get("max_speed"), rec.get("avg_rpm"), rec.get("calories"),
                 rec.get("stars"), int(bool(rec.get("finished"))), rec.get("coins"), rec.get("rank"),
-                json.dumps(rec.get("session_log") or []), created_at,
+                json.dumps([int(round(x)) for x in (rec.get("session_log") or [])]), created_at,
             ),
         )
+        if rec.get("stage_id") and rec.get("finished"):
+            self._prune_ghost_logs(rec["stage_id"])
         self.conn.execute(
             """UPDATE stats SET total_distance_m = total_distance_m + ?,
                    total_calories = total_calories + ?, total_sessions = total_sessions + 1,
@@ -86,6 +88,17 @@ class Records:
         )
         self.conn.commit()
         return cur.lastrowid
+
+    def _prune_ghost_logs(self, stage_id: int):
+        """고스트로 쓰이는 건 스테이지별 최고 기록 하나뿐이다. 나머지 로그는 버려서
+        DB가 세션마다 10KB씩 불어나지 않게 한다."""
+        self.conn.execute(
+            """UPDATE records SET session_log='[]'
+               WHERE mode='stage' AND stage_id=? AND session_log != '[]'
+                 AND id != (SELECT id FROM records WHERE mode='stage' AND stage_id=? AND finished=1
+                            ORDER BY elapsed_sec ASC, id ASC LIMIT 1)""",
+            (stage_id, stage_id),
+        )
 
     def list_records(self, limit: int = 50) -> list[dict]:
         rows = self.conn.execute(
@@ -117,13 +130,15 @@ class Records:
         return {r["stage_id"]: {"best_sec": r["best_sec"], "best_stars": r["best_stars"]} for r in rows}
 
     def recent_avg_rpm(self, limit: int = 5, default: float = 65.0) -> float:
-        """AI 라이벌 난이도용: 최근 세션들의 평균 페달링 RPM."""
+        """AI 라이벌 난이도용: 최근 세션들의 평균 페달링 RPM.
+        홈싸이클은 110 RPM대도 흔하므로 상한을 넉넉히 둔다 (예전 100 상한은 라이벌을
+        실제 실력보다 약하게 만들었다)."""
         rows = self.conn.execute(
             "SELECT avg_rpm FROM records WHERE avg_rpm > 0 ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
         if not rows:
             return default
-        return max(45.0, min(100.0, sum(r["avg_rpm"] for r in rows) / len(rows)))
+        return max(45.0, min(135.0, sum(r["avg_rpm"] for r in rows) / len(rows)))
 
     # --- 업적 ---
     def unlock(self, achievement_id: str) -> bool:
