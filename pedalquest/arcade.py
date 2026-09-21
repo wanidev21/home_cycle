@@ -11,6 +11,10 @@ from .physics import step_speed, target_speed
 COUNTDOWN_SEC = 3.0
 VIEW_AHEAD_M = 450
 SPURT_HOLD_SEC = 2.0
+SPURT_EXTRA_MIN = 10.0     # 평소 RPM에 더할 최소/최대 폭
+SPURT_EXTRA_MAX = 18.0
+SPURT_FLOOR = 50.0
+SPURT_CAP = 150.0
 COIN_MIN_SPEED = 12.0      # km/h. 이보다 느리면 코인을 놓친다
 MAX_COIN_BOOST = 10        # 코인 1개당 속도 +1%, 최대 10%
 SLIP_DECEL = 15.0          # km/h/s
@@ -25,7 +29,7 @@ ITEMS = {
     "turbo":     {"name": "터보", "emoji": "🚀", "desc": "5초간 속도 +35%"},
     "banana":    {"name": "바나나", "emoji": "🍌", "desc": "뒤에 떨어뜨려 라이벌을 미끄러뜨림"},
     "shield":    {"name": "바람막이", "emoji": "🛡", "desc": "12초간 오르막 영향 절반 + 바나나 방어"},
-    "magnet":    {"name": "드래프트 자석", "emoji": "🧲", "desc": "6초간 앞 선수에게 끌려감"},
+    "magnet":    {"name": "드래프트 자석", "emoji": "🧲", "desc": "6초간 앞 선수에게 끌려감 (+30%)"},
     "star":      {"name": "무적 스퍼트", "emoji": "⭐", "desc": "8초간 빨라지고 부딪힌 라이벌을 튕겨냄"},
     "lightning": {"name": "번개", "emoji": "⚡", "desc": "앞선 라이벌 전원 3초간 감속"},
 }
@@ -34,18 +38,41 @@ ITEM_WEIGHTS = {
     "banana": (45, 5), "shield": (30, 10), "turbo": (20, 30),
     "magnet": (5, 20), "star": (0, 22), "lightning": (0, 13),
 }
-EFFECT_SEC = {"turbo": 5.0, "shield": 12.0, "magnet": 6.0, "star": 8.0, "slip": 1.6, "pad": 2.0}
+EFFECT_SEC = {"turbo": 5.0, "shield": 12.0, "magnet": 6.0, "star": 8.0, "slip": 1.3, "pad": 2.0}
 
 RIVALS = [
     {"id": "r1", "name": "민준", "color": "#3a86ff", "persona": "climber"},
     {"id": "r2", "name": "서연", "color": "#8338ec", "persona": "sprinter"},
     {"id": "r3", "name": "도윤", "color": "#06d6a0", "persona": "steady"},
     {"id": "r4", "name": "하은", "color": "#ffbe0b", "persona": "starter"},
-    {"id": "r5", "name": "지호", "color": "#ef476f", "persona": "steady"},
+    {"id": "r5", "name": "지호", "color": "#ef476f", "persona": "attacker"},
 ]
-PERSONA_LABEL = {"climber": "오르막 강자", "sprinter": "막판 스퍼터", "steady": "꾸준형", "starter": "초반 질주형"}
+# label: HUD 표시 / hill: 오르막 완화 / attack: 어택 빈도 배율 / stamina: 체력 크기
+# early·late: 코스 앞·뒷부분 페이스 배율, late_from: 뒷심을 쓰기 시작하는 지점(0~1)
+PERSONAS = {
+    "climber":  {"label": "오르막 강자", "hill": 0.45, "attack": 1.0, "stamina": 1.05, "early": 1.00, "late": 1.00, "late_from": 0.80},
+    "sprinter": {"label": "막판 스퍼터", "hill": 0.00, "attack": 0.9, "stamina": 0.95, "early": 0.96, "late": 1.16, "late_from": 0.86},
+    "steady":   {"label": "꾸준형",      "hill": 0.15, "attack": 0.5, "stamina": 1.25, "early": 1.00, "late": 1.03, "late_from": 0.80},
+    "starter":  {"label": "초반 질주형",  "hill": 0.00, "attack": 0.9, "stamina": 0.85, "early": 1.12, "late": 0.95, "late_from": 0.65},
+    "attacker": {"label": "공격형",      "hill": 0.20, "attack": 2.0, "stamina": 0.90, "early": 1.00, "late": 1.02, "late_from": 0.80},
+}
+PERSONA_LABEL = {k: v["label"] for k, v in PERSONAS.items()}
 SKILL_SPREAD = [0.86, 0.93, 0.99, 1.05, 1.12]   # 내 평소 RPM 대비 라이벌 실력
+SKILL_JITTER = 0.03      # 같은 라이벌이라도 매 경기 실력이 조금씩 다르다
 RIVAL_LANES = [-0.62, 0.62, -0.3, 0.3, -0.85]
+
+# 스태미나: 무리하면 닳고, 쉬엄쉬엄 가면 조금씩 찬다. 바닥나면 페이스가 10% 떨어진다.
+STAMINA_DRAIN = 0.09     # 초당, (노력 - 1.04) 1당
+STAMINA_RECOVER = 0.035  # 초당, (1.0 - 노력) 1당
+FADE_FLOOR = 0.90        # 스태미나 0일 때의 페이스 배율
+FADE_RANGE = 0.35        # 이 밑으로 떨어지면 페이스가 깎이기 시작
+ATTACK_BASE = 0.012      # 초당 어택 확률 (성격·상황 배율이 곱해짐)
+ATTACK_MIN_STAMINA = 0.40
+NEAR_M = 25.0            # 이 안쪽이면 "붙었다" → 어택이 잦아짐
+TALK_M = 140.0           # 이 안쪽의 라이벌만 화면에 알린다
+ATTACK_TALK_M = 80.0     # 어택은 눈에 보일 만큼 가까울 때만 알린다
+PASS_HYSTERESIS_M = 2.0
+PASS_COOLDOWN_SEC = 12.0   # 접전 중 추월 알림이 도배되지 않게
 
 
 def pick_item(rank_frac: float, rng: random.Random) -> str:
@@ -73,12 +100,26 @@ def crossed(prev: float, cur: float, d: float) -> bool:
     return prev < d <= cur
 
 
+def persona_pace(frac: float, p: dict) -> float:
+    """코스 진행도에 따른 페이스 배율. 초반 질주형은 앞에서, 스퍼터는 뒤에서 힘을 쓴다."""
+    if frac < 0.20:
+        return p["early"]
+    if frac < 0.40:
+        return p["early"] + (1.0 - p["early"]) * (frac - 0.20) / 0.20
+    lf = p["late_from"]
+    if frac < lf:
+        return 1.0
+    span = max(0.05, (1.0 - lf) * 0.6)
+    return 1.0 + (p["late"] - 1.0) * min(1.0, (frac - lf) / span)
+
+
 class Rival:
     def __init__(self, spec: dict, skill_rpm: float, lane: float, rng: random.Random):
         self.id = spec["id"]
         self.name = spec["name"]
         self.color = spec["color"]
         self.persona = spec["persona"]
+        self.p = PERSONAS[spec["persona"]]
         self.skill = skill_rpm
         self.lane = lane
         self.distance = 0.0
@@ -89,6 +130,20 @@ class Rival:
         self.item_timer = 0.0
         self.finished_at: float | None = None
         self.phase = rng.random() * 10
+        # 살아있는 느낌: 체력, 어택, 느린 랜덤워크, 라이벌마다 다른 고무줄 강도
+        self.stamina = 1.0
+        self.attack = 0.0            # 남은 어택 시간(초)
+        self.attack_mult = 1.0
+        self.attack_cd = rng.uniform(20, 70)
+        self.recover = 0.0           # 어택 직후 숨 고르기
+        self.wander = 0.0
+        self.rubber = rng.uniform(0.75, 1.25)
+        self.faded = False           # "페이스가 떨어졌다"를 한 번만 알림
+        self.ahead: bool | None = None
+        self.pass_cd = 0.0
+
+    def fade_mult(self) -> float:
+        return FADE_FLOOR + (1 - FADE_FLOOR) * min(1.0, self.stamina / FADE_RANGE)
 
 
 class ArcadeRace:
@@ -99,7 +154,8 @@ class ArcadeRace:
         self.factor_fn = factor_fn
         self.skill = player_skill_rpm
         self.countdown = COUNTDOWN_SEC
-        skills = [player_skill_rpm * s for s in SKILL_SPREAD]
+        skills = [player_skill_rpm * sp * self.rng.uniform(1 - SKILL_JITTER, 1 + SKILL_JITTER)
+                  for sp in SKILL_SPREAD]
         self.rng.shuffle(skills)
         self.rivals = [Rival(spec, sk, lane, self.rng) for spec, sk, lane in zip(RIVALS, skills, RIVAL_LANES)]
 
@@ -160,7 +216,10 @@ class ArcadeRace:
 
     # --- 플레이어 ---
     def spurt_threshold(self) -> float:
-        return max(self.baseline_rpm * 1.2, self.baseline_rpm + 12, 45.0)
+        """평소 페이스보다 확실히 빠른 구간. 배율(×1.2)만 쓰면 평소 110 RPM인 사람에게
+        135 RPM을 요구하게 되므로 더하기 폭에 상·하한을 둔다."""
+        extra = min(SPURT_EXTRA_MAX, max(SPURT_EXTRA_MIN, self.baseline_rpm * 0.15))
+        return min(SPURT_CAP, max(self.baseline_rpm + extra, SPURT_FLOOR))
 
     def player_boost(self, factor: float) -> tuple[float, float]:
         """엔진이 속도 계산 전에 호출. (목표속도 배율, 적용할 지형계수)"""
@@ -173,8 +232,8 @@ class ArcadeRace:
         if "pad" in e:
             boost *= 1.3
         if "magnet" in e:
-            ahead = any(0 < r.distance - self.player_d < 100 for r in self.rivals if r.finished_at is None)
-            boost *= 1.2 if ahead else 1.08
+            ahead = any(5 < r.distance - self.player_d < 150 for r in self.rivals if r.finished_at is None)
+            boost *= 1.3 if ahead else 1.1     # 끌어당길 상대가 없으면 약해진다
         if self.drafting:
             boost *= 1.08
         if "slip" in e:
@@ -294,26 +353,107 @@ class ArcadeRace:
             self.emit("last_spurt")
 
     # --- 라이벌 ---
+    def _maybe_attack(self, r: "Rival", frac: float, factor: float, gap: float, dt: float):
+        """어택: 갑자기 치고 나가는 순간. 성격과 상황(붙었을 때, 오르막, 막판)에 따라 확률이 오른다."""
+        if r.attack > 0:
+            r.attack -= dt
+            if r.attack <= 0:
+                r.attack = 0.0
+                r.recover = self.rng.uniform(8, 18)
+                r.attack_cd = self.rng.uniform(25, 60)
+            return
+        if r.recover > 0:
+            r.recover -= dt
+        if r.attack_cd > 0:
+            r.attack_cd -= dt
+            return
+        if r.stamina < ATTACK_MIN_STAMINA or self.player_finished:
+            return
+        chance = ATTACK_BASE * r.p["attack"]
+        if abs(gap) < NEAR_M:
+            chance *= 2.2
+        if r.persona == "climber" and factor < 0.92:
+            chance *= 2.5
+        elif r.persona == "sprinter" and frac > 0.80:
+            chance *= 3.0
+        elif r.persona == "starter" and frac < 0.25:
+            chance *= 2.5
+        if self.rng.random() < chance * dt:
+            r.attack = self.rng.uniform(6, 13)
+            r.attack_mult = self.rng.uniform(1.10, 1.20)
+            if abs(gap) < ATTACK_TALK_M:
+                self.emit("rival_attack", name=r.name, persona=PERSONA_LABEL[r.persona])
+
+    def _rival_uses_item(self, r: "Rival", frac: float, factor: float, gap: float) -> bool:
+        """아이템을 아무 때나 쓰지 않고 상황을 본다. 너무 오래 들고 있으면 그냥 쓴다."""
+        if r.item_timer <= 0:
+            return True
+        if r.item == "turbo":
+            if r.persona == "climber" and factor < 0.92:
+                return True
+            if frac > 0.88:
+                return True
+            return -60 < gap < 0            # 플레이어 바로 뒤 → 추월 시도
+        return 0 < gap < 40                  # 바나나: 플레이어가 바로 뒤에 붙었을 때
+
+    def _track_pass(self, r: "Rival", gap: float, dt: float):
+        """플레이어와 라이벌이 서로 앞서거니 뒤서거니 하는 순간을 알린다."""
+        r.pass_cd = max(0.0, r.pass_cd - dt)
+        if self.player_finished or r.finished_at is not None:
+            return
+        ahead = r.ahead
+        if gap > PASS_HYSTERESIS_M and ahead is not True:
+            if ahead is False and r.pass_cd <= 0:
+                r.pass_cd = PASS_COOLDOWN_SEC
+                self.emit("rival_pass", name=r.name)      # 라이벌이 나를 추월
+            r.ahead = True
+        elif gap < -PASS_HYSTERESIS_M and ahead is not False:
+            if ahead is True and r.pass_cd <= 0:
+                r.pass_cd = PASS_COOLDOWN_SEC
+                self.emit("rival_passed", name=r.name)    # 내가 추월
+            r.ahead = False
+
     def update_rivals(self, dt: float, elapsed: float):
         for r in self.rivals:
             if r.finished_at is not None:
                 continue
             tick_effects(r.effects, dt)
             frac = r.distance / self.total
-            noise = 1 + 0.05 * math.sin(elapsed * 0.3 + r.phase) + 0.03 * math.sin(elapsed * 1.1 + r.phase * 2)
-            rpm = r.skill * noise
             factor = self.factor_fn(r.distance)
-            if r.persona == "climber" and factor < 1:
-                factor += (1 - factor) * 0.45
-            elif r.persona == "sprinter":
-                rpm *= 1.15 if frac > 0.85 else 0.97
-            elif r.persona == "starter":
-                rpm *= 1.12 if frac < 0.25 else 0.95 if frac > 0.6 else 1.0
+            gap = r.distance - self.player_d
+            self._maybe_attack(r, frac, factor, gap, dt)
+
+            # 느린 랜덤워크 + 잔물결 → 사인파만 쓸 때의 기계적인 반복을 없앤다
+            r.wander += -r.wander * dt / 4.0 + self.rng.gauss(0, 1) * (dt ** 0.5) * 0.06
+            r.wander = max(-0.12, min(0.12, r.wander))
+            noise = 1 + r.wander + 0.02 * math.sin(elapsed * 1.1 + r.phase)
+
+            pace = persona_pace(frac, r.p)
+            effort = pace * noise
+            if r.attack > 0:
+                effort *= r.attack_mult
+            elif r.recover > 0:
+                effort *= 0.94
+            rpm = r.skill * effort * r.fade_mult()
+
+            # 스태미나: 무리한 만큼 닳고, 여유 있게 가면 회복
+            if effort > 1.04:
+                r.stamina -= (effort - 1.04) * STAMINA_DRAIN * dt
+            elif effort < 1.0:
+                r.stamina += (1.0 - effort) * STAMINA_RECOVER * dt
+            r.stamina = max(0.0, min(1.0, r.stamina))
+            if not r.faded and r.stamina < 0.30:
+                r.faded = True
+                if abs(gap) < TALK_M and not self.player_finished:
+                    self.emit("rival_tired", name=r.name)
+
+            if r.p["hill"] and factor < 1:
+                factor += (1 - factor) * r.p["hill"]
             r.rpm = rpm
 
             # 고무줄 효과: 너무 앞서면 느려지고, 너무 뒤처지면 빨라진다 → 항상 접전
             # ±30m 안은 실력대로. 그 밖은 거리에 비례해 보정 (뒤처지면 최대 +40%, 앞서면 최대 -25%)
-            gap = r.distance - self.player_d
+            # 강도는 라이벌마다 달라서(r.rubber) 다 같이 몰려다니지 않는다.
             if self.player_finished:
                 band = 1.0
             elif gap > 30:
@@ -322,7 +462,7 @@ class ArcadeRace:
                 band = 1 + min(1.0, (-gap - 30) / 200) * 0.40
             else:
                 band = 1.0
-            boost = band
+            boost = 1 + (band - 1) * r.rubber
             if "turbo" in r.effects:
                 boost *= 1.3
             if "pad" in r.effects:
@@ -338,11 +478,12 @@ class ArcadeRace:
             prev = r.distance
             r.speed = advance(r.speed, rpm, factor, boost, "slip" in r.effects, dt)
             r.distance += r.speed / 3.6 * dt
+            self._track_pass(r, r.distance - self.player_d, dt)
 
             for b in self.boxes:
                 if crossed(prev, r.distance, b) and r.item is None:
                     r.item = self.rng.choice(["turbo", "turbo", "banana"])
-                    r.item_timer = self.rng.uniform(2, 8)
+                    r.item_timer = self.rng.uniform(4, 14)
             for p in self.pads:
                 if crossed(prev, r.distance, p):
                     r.effects["pad"] = EFFECT_SEC["pad"]
@@ -355,7 +496,7 @@ class ArcadeRace:
 
             if r.item:
                 r.item_timer -= dt
-                if r.item_timer <= 0:
+                if self._rival_uses_item(r, frac, factor, r.distance - self.player_d):
                     if r.item == "turbo":
                         r.effects["turbo"] = 4.0
                     else:
@@ -381,7 +522,10 @@ class ArcadeRace:
             "id": r.id, "name": r.name, "kind": "ai", "color": r.color, "lane": r.lane,
             "persona": PERSONA_LABEL[r.persona], "distance_m": round(r.distance, 1),
             "rpm": round(r.rpm), "finished": r.finished_at is not None,
-            "effect": "slip" if "slip" in r.effects else "turbo" if ("turbo" in r.effects or "pad" in r.effects) else None,
+            "effect": ("slip" if "slip" in r.effects else
+                       "turbo" if ("turbo" in r.effects or "pad" in r.effects) else
+                       "attack" if r.attack > 0 else None),
+            "tired": r.stamina < FADE_RANGE,
         } for r in self.rivals]
 
     def leaderboard(self) -> list[dict]:

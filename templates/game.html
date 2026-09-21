@@ -1469,7 +1469,9 @@ function riderOpts(r) {
   const eff = r.effect;
   return {
     tire: "#1b1b1f", shorts: "#23263a", skin: "#d9a77f", shoe: "#ffffff", jersey: r.color, stripe: "#ffffff", helmet: r.color,
-    label: r.name, flame: eff === "turbo", tilt: eff === "slip" ? Math.sin(performance.now() / 60) * 0.3 : 0, dizzy: eff === "slip",
+    label: r.tired ? r.name + " 🥵" : r.name,
+    flame: eff === "turbo" || eff === "attack",
+    tilt: eff === "slip" ? Math.sin(performance.now() / 60) * 0.3 : 0, dizzy: eff === "slip",
   };
 }
 
@@ -2036,6 +2038,10 @@ function onArcadeEvent(e) {
     case "dog_caught": toast(`🐕 잡혔다! ${e.coins_lost ? `코인 -${e.coins_lost}` : ""}`); audio.bark(); audio.slip(); break;
     case "dog_escape": toast(`🐕 따돌렸다! 코인 +${e.coins}`); audio.chime("achievement"); break;
     case "last_spurt": toast("🔥 라스트 스퍼트! 300m 남았어요"); audio.chime("overtake"); break;
+    case "rival_attack": toast(`💨 ${e.name} 치고 나갑니다! (${e.persona})`); audio.whoosh(); break;
+    case "rival_tired": toast(`🥵 ${e.name} 페이스가 떨어졌어요`); break;
+    case "rival_pass": toast(`${e.name}에게 추월당했어요! 💪`); audio.chime("overtaken"); break;
+    case "rival_passed": audio.chime("overtake"); break;   // 내가 추월 — 소리만 (접전 중엔 잦다)
     case "rival_finish": toast(`🏁 ${e.name} 먼저 골인!`); break;
     case "race_finish": audio.chime("finish"); break;
   }

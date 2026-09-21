@@ -188,3 +188,99 @@ def test_arcade_state_shape(env):
         assert key in a
     assert len([r for r in s["riders"] if r["kind"] == "ai"]) == 5
     assert any(o["t"] == "coin" for o in a["objects"])
+
+
+# --- AI 라이벌 성격/스태미나 ---
+
+def test_persona_pace_curves():
+    from pedalquest.arcade import PERSONAS, persona_pace
+    starter, sprinter = PERSONAS["starter"], PERSONAS["sprinter"]
+    assert persona_pace(0.1, starter) > 1.05          # 초반 질주형은 앞에서 빠르다
+    assert persona_pace(0.9, starter) < 1.0           # 뒤에선 처진다
+    assert persona_pace(0.1, sprinter) < 1.0          # 스퍼터는 초반에 아낀다
+    assert persona_pace(0.99, sprinter) > 1.1         # 막판에 터뜨린다
+    steady = PERSONAS["steady"]
+    assert all(0.95 <= persona_pace(f / 20, steady) <= 1.05 for f in range(21))
+
+
+def _run_race(stage_id=3, player_rpm=75, seed=5, limit=2500):
+    from pedalquest.arcade import advance
+    stage = STAGES[stage_id]
+    segs = stage_segments(stage)
+    race = ArcadeRace(stage, player_rpm, lambda d: blended_factor(segs, d), seed)
+    d = v = t = 0.0
+    events = []
+    while d < race.total and t < limit:
+        f = blended_factor(segs, d)
+        boost, ef = race.player_boost(f)
+        v = advance(v, player_rpm, ef, boost, "slip" in race.effects, DT)
+        prev, d, t = d, d + v / 3.6 * DT, t + DT
+        race.after_player_move(prev, d, v, player_rpm, DT)
+        race.update_rivals(DT, t)
+        events.extend(race.pop_events())
+    return race, events, t
+
+
+def test_rivals_attack_and_tire():
+    race, events, _ = _run_race()
+    assert any(e["kind"] == "rival_attack" for e in events), "라이벌이 한 번도 치고 나가지 않음"
+    assert any(r.stamina < 0.7 for r in race.rivals), "스태미나가 전혀 닳지 않음"
+    assert all(r.stamina >= 0.0 for r in race.rivals)
+
+
+def test_rivals_are_not_clones():
+    """같은 시드라도 라이벌끼리는 서로 다른 페이스로 달린다 (랜덤워크 + 고무줄 강도)."""
+    race, _, _ = _run_race()
+    dists = sorted(r.distance for r in race.rivals)
+    assert dists[-1] - dists[0] > 20, "라이벌이 한 덩어리로 붙어다님"
+    assert len({round(r.rubber, 3) for r in race.rivals}) == 5
+
+
+def test_race_is_close_regardless_of_player_pace():
+    for rpm in (60, 90, 115):
+        race, _, _ = _run_race(stage_id=2, player_rpm=rpm, seed=11)
+        gaps = [abs(r.distance - race.player_d) for r in race.rivals]
+        assert min(gaps) < 120, f"{rpm}rpm: 가장 가까운 라이벌이 {min(gaps):.0f}m"
+
+
+def test_rival_uses_turbo_when_just_behind_player():
+    race = make_race(stage_id=1)
+    r = race.rivals[0]
+    race.player_d, r.distance, r.speed = 500.0, 470.0, 25.0   # 플레이어 30m 뒤
+    r.item, r.item_timer = "turbo", 10.0                      # 아직 최대 보유시간 전
+    race.update_rivals(DT, 30)
+    assert r.item is None and "turbo" in r.effects
+
+
+def test_rival_holds_turbo_when_it_would_be_wasted():
+    race = make_race(stage_id=1)
+    r = race.rivals[0]
+    race.player_d, r.distance, r.speed = 200.0, 600.0, 25.0   # 한참 앞 → 아껴둔다
+    r.item, r.item_timer = "turbo", 10.0
+    race.update_rivals(DT, 30)
+    assert r.item == "turbo"
+
+
+def test_pass_events_do_not_spam():
+    """나란히 달릴 때 추월 알림이 초당 여러 번 나오면 안 된다."""
+    race = make_race(stage_id=1)
+    r = race.rivals[0]
+    r.speed = 25.0
+    kinds = []
+    for i in range(int(20 / DT)):
+        race.player_d = 500.0
+        r.distance = 500.0 + (5 if (i // 30) % 2 else -5)      # 1초마다 앞뒤 교대
+        race._track_pass(r, r.distance - race.player_d, DT)
+        kinds += [e["kind"] for e in race.pop_events()]
+    assert 0 < len(kinds) <= 4, f"20초 동안 추월 알림 {len(kinds)}회"
+
+
+def test_spurt_threshold_stays_reachable_for_fast_riders():
+    """평소 케이던스가 높아도 스퍼트 요구치가 불가능해지면 안 된다."""
+    race = make_race(stage_id=1)
+    for base in (50, 70, 90, 113, 130):
+        race.baseline_rpm = base
+        extra = race.spurt_threshold() - base
+        assert 9 <= extra <= 19, f"평소 {base} RPM -> +{extra:.0f} RPM 요구"
+    race.baseline_rpm = 20                      # 워밍업 중이어도 최소 기준은 있다
+    assert race.spurt_threshold() >= 50
