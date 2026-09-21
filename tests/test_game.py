@@ -52,7 +52,7 @@ def test_free_ride_moves_and_auto_pauses(env):
 def test_stage_finish_saves_record_and_achievements(env):
     game, sensor, records = env
     game.start_stage(1)
-    sensor.rpm = 80
+    sensor.rpm = 100          # ★★★ 기준(90 RPM)보다 빠르게
     run(game, 900)
     assert game.state == "finished"
     assert game.result["finished"] and game.result["stars"] == 3

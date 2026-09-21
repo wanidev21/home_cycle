@@ -11,7 +11,7 @@ STAGES = {
     1: {
         "name": "🌆 도시 평지", "distance_m": 3000, "theme": "city",
         "terrain": [{"end_km": 3.0, "factor": 1.0}],
-        "stars": {"3": 420, "2": 510, "1": 630},
+        "stars": {"3": 380, "2": 430, "1": 500},
     },
     2: {
         "name": "🌄 언덕길", "distance_m": 3000, "theme": "suburb",
@@ -20,7 +20,7 @@ STAGES = {
             {"end_km": 2.0, "factor": 0.6},
             {"end_km": 3.0, "factor": 1.3},
         ],
-        "stars": {"3": 480, "2": 570, "1": 720},
+        "stars": {"3": 430, "2": 485, "1": 570},
     },
     3: {
         "name": "⛰ 산악 코스", "distance_m": 5000, "theme": "mountain",
@@ -31,12 +31,12 @@ STAGES = {
             {"end_km": 4.5, "factor": 0.7},
             {"end_km": 5.0, "factor": 1.2},
         ],
-        "stars": {"3": 840, "2": 990, "1": 1260},
+        "stars": {"3": 740, "2": 840, "1": 990},
     },
     4: {
         "name": "⚡ 스프린트", "distance_m": 2000, "theme": "city",
         "terrain": [{"end_km": 2.0, "factor": 1.0}],
-        "stars": {"3": 250, "2": 280, "1": 330},
+        "stars": {"3": 235, "2": 260, "1": 290},
     },
     5: {
         "name": "🏆 그란폰도", "distance_m": 7000, "theme": "beach",
@@ -48,7 +48,7 @@ STAGES = {
             {"end_km": 6.5, "factor": 1.0},
             {"end_km": 7.0, "factor": 0.6},
         ],
-        "stars": {"3": 1080, "2": 1260, "1": 1590},
+        "stars": {"3": 945, "2": 1070, "1": 1260},
     },
 }
 
