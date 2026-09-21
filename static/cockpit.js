@@ -1,19 +1,39 @@
 // ============================================================
-// PedalQuest 1인칭 콕핏 — 모바일 게임 애니메이션 스타일
-// game.html의 전역(H, W, ctx, disp, clamp, lerp, mod, NUM_FONT)을 그대로 쓴다.
-// 2D·3D 어느 렌더러를 쓰든 이 함수가 1인칭 콕핏을 전부 그린다
-// (3D 쪽 콕핏 메시는 숨긴다 — 핸들바·속도계를 두 번 그리면 겹친다).
-// 스타일을 갈아끼울 때는 이 파일만 바꾸면 된다.
-// ============================================================
+// PedalQuest 1인칭 콕핏 — 스프라이트 + 코드 혼합
 //
-// 스타일 키워드: 블루아카이브/니케/에픽세븐 급 모바일 게임 일러스트
-// - 굵은 외곽선 (dark outline, 2-3px)
-// - 셀 셰이딩 (베이스 → 그림자 → 하이라이트, 3톤)
-// - 깔끔한 곡선, 매끄러운 실루엣
-// - 장갑/저지에 디테일 (스티칭, 로고, 패턴)
+// 팔·손·핸들바는 그려둔 PNG를 쓴다 (도형으로는 나오지 않는 질감).
+// 무릎은 아직 코드로 그린다: 무릎 PNG에 도로 배경과 핸들바가 같이 찍혀 있어
+// 3D 월드 위에 얹으면 도로가 두 겹이 되고 핸들바가 둘이 된다.
+// 배경이 지워진 다리 PNG가 생기면 아래 kneeL/kneeR가 자동으로 그쪽을 쓴다.
 //
-// 통합: templates/game.html의 drawCockpit(now, o)를 이 코드로 교체
+// game.html의 전역(H, W, ctx, disp, clamp, NUM_FONT)을 그대로 쓴다.
+// 2D·3D 어느 렌더러를 쓰든 이 함수가 1인칭 콕핏을 전부 그린다.
 // ============================================================
+
+// 스프라이트는 있으면 쓰고 없으면 건너뛴다. 하나가 없다고 콕핏 전체가 사라지면 안 된다.
+const COCKPIT_SPRITES = {
+  arms: "/static/cockpit-arms.png",
+  kneeL: "/static/knee-left.png",
+  kneeR: "/static/knee-right.png",
+};
+const cockpitImg = {};
+for (const [key, url] of Object.entries(COCKPIT_SPRITES)) {
+  const img = new Image();
+  img.onerror = () => { img.missing = true; };
+  img.src = url;
+  cockpitImg[key] = img;
+}
+// naturalWidth는 로드가 끝나야 0이 아니다 → 이 한 줄이 "쓸 수 있나"의 전부
+const usable = (img) => !!(img && !img.missing && img.naturalWidth);
+// 무릎 PNG는 배경이 지워진 것만 쓴다 (지금 것은 도로와 핸들바가 같이 찍혀 있다)
+const KNEE_SPRITES_READY = false;
+// 코드로 그린 무릎은 일러스트 팔과 화풍이 안 맞아 오히려 눈에 걸린다.
+// 배경 없는 다리 PNG가 생기면 KNEE_SPRITES_READY와 함께 켠다.
+const SHOW_KNEES = false;
+// 팔 스프라이트 배치. 그림 속 핸들바는 이미지 높이의 약 54% 지점에 있다.
+const ARMS_WIDTH = 0.74;     // 화면 폭 대비
+const BAR_AT_Y = 0.70;       // 핸들바가 놓일 화면 높이 (0=위, 1=아래)
+const BAR_IN_SPRITE = 0.54;
 
 function drawCockpit(now, o) {
   const u = Math.min(H, W * 0.62) / 100;
@@ -79,476 +99,150 @@ function drawCockpit(now, o) {
   }
 
   // ================================================================
-  // 1) 앞바퀴
+  // 1) 무릎 — 팔보다 먼저 (팔이 위에 와야 한다)
   // ================================================================
-  const wheelCy = by + 6 * u;
-  const wheelRx = 4.2 * u;
-  const wheelRy = 24 * u;
+  if (!SHOW_KNEES) {
+    // 그려 넣지 않는다 (아래 주석 참고)
+  } else if (KNEE_SPRITES_READY && usable(cockpitImg.kneeL) && usable(cockpitImg.kneeR)) {
+    for (const side of [-1, 1]) {
+      const img = side < 0 ? cockpitImg.kneeL : cockpitImg.kneeR;
+      const a = disp.angle + (side < 0 ? 0 : Math.PI);
+      const lift = (1 - Math.cos(a)) / 2;
+      const kh = H * 0.55, kw = kh * (img.naturalWidth / img.naturalHeight);
+      const kx = W / 2 + side * W * 0.16 - kw / 2 + sway;
+      const ky = H - kh * 0.35 + buzz - lift * H * 0.12;
+      const dance = climbing ? Math.sin(a) * W * 0.02 : 0;
+      ctx.drawImage(img, kx + dance, ky, kw, kh);
+    }
+  } else {
+    // ================================================================
+    for (const side of [-1, 1]) {
+      const a = disp.angle + (side < 0 ? 0 : Math.PI);
+      const lift = (1 - Math.cos(a)) / 2;   // 0(아래) ~ 1(위)
+      const ky = by + 10 * u - lift * 24 * u;
+      const kx = cx + side * (13 + lift * 2) * u;
 
-  // 타이어 외곽선 (두꺼운 아웃라인)
+      // --- 허벅지 (반바지) ---
+      const thighTop = ky + 3.6 * u;
+      const thighBot = by + 26 * u;
+      const thighW = 6.8 * u;
+
+      // 외곽선 먼저
+      ctx.beginPath();
+      ctx.moveTo(kx - thighW - OL * 0.3, thighTop);
+      ctx.lineTo(kx + thighW + OL * 0.3, thighTop);
+      ctx.lineTo(kx + side * 3 * u + 9.5 * u, thighBot);
+      ctx.lineTo(kx + side * 3 * u - 9.5 * u, thighBot);
+      ctx.closePath();
+      ctx.fillStyle = SHORTS.outline;
+      ctx.fill();
+
+      // 반바지 본체 (셀 셰이딩)
+      ctx.beginPath();
+      ctx.moveTo(kx - thighW, thighTop);
+      ctx.lineTo(kx + thighW, thighTop);
+      ctx.lineTo(kx + side * 3 * u + 9 * u, thighBot);
+      ctx.lineTo(kx + side * 3 * u - 9 * u, thighBot);
+      ctx.closePath();
+      ctx.fillStyle = cellGrad(kx, thighTop, thighBot, SHORTS.highlight, SHORTS.base, SHORTS.shadow);
+      ctx.fill();
+
+      // 반바지 밑단 라인 (디테일)
+      ctx.strokeStyle = SHORTS.highlight;
+      ctx.lineWidth = OL_THIN;
+      ctx.beginPath();
+      ctx.moveTo(kx - thighW + 0.5 * u, thighTop + 1 * u);
+      ctx.lineTo(kx + thighW - 0.5 * u, thighTop + 1 * u);
+      ctx.stroke();
+
+      // 반바지 사이드 스트라이프 (저지 색 포인트)
+      ctx.fillStyle = JERSEY.base;
+      ctx.globalAlpha = 0.4;
+      ctx.fillRect(
+        kx + side * (thighW - 1.2 * u), thighTop + 2 * u,
+        side * 1.0 * u, (thighBot - thighTop) * 0.5
+      );
+      ctx.globalAlpha = 1;
+
+      // --- 무릎 (피부) ---
+      // 외곽선
+      ctx.beginPath();
+      ctx.ellipse(kx, ky + 1.5 * u, 6.6 * u, 3.3 * u, 0, Math.PI, 0);
+      ctx.lineTo(kx + 6.8 * u, ky + 4.2 * u);
+      ctx.lineTo(kx - 6.8 * u, ky + 4.2 * u);
+      ctx.closePath();
+      ctx.fillStyle = SKIN.outline;
+      ctx.fill();
+
+      // 무릎 본체 (셀 셰이딩)
+      ctx.beginPath();
+      ctx.ellipse(kx, ky + 1.5 * u, 6.2 * u, 3 * u, 0, Math.PI, 0);
+      ctx.lineTo(kx + 6.4 * u, ky + 4 * u);
+      ctx.lineTo(kx - 6.4 * u, ky + 4 * u);
+      ctx.closePath();
+      ctx.fillStyle = cellGrad(kx, ky - 1 * u, ky + 4 * u, SKIN.highlight, SKIN.base, SKIN.shadow);
+      ctx.fill();
+
+      // 무릎 하이라이트 (반사광 — 모바일 게임 특유의 광택)
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.beginPath();
+      ctx.ellipse(kx - side * 1.5 * u, ky + 0.8 * u, 2.5 * u, 1.3 * u, side * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 무릎뼈 그림자 (은은하게)
+      ctx.fillStyle = "rgba(0,0,0,0.10)";
+      ctx.beginPath();
+      ctx.ellipse(kx + side * 2 * u, ky + 1.8 * u, 2.2 * u, 1.2 * u, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+  }
+
+  // ================================================================
+  // 2) 팔 + 손 + 핸들바 (스프라이트)
+  // ================================================================
+  const arms = cockpitImg.arms;
+  let barY = by - 30 * u;                 // 속도계를 올릴 핸들바 높이
+  if (usable(arms)) {
+    // 화면 높이로 맞추면 팔이 화면을 다 덮는다. 폭으로 맞추고, 그림 속 핸들바가
+    // 화면의 BAR_AT_Y 높이에 오도록 세로 위치를 역산한다.
+    const aw = W * ARMS_WIDTH;
+    const ah = aw * (arms.naturalHeight / arms.naturalWidth);
+    const ax = W / 2 - aw / 2 + sway * 1.2;
+    const ay = H * BAR_AT_Y - ah * BAR_IN_SPRITE + buzz;
+    ctx.drawImage(arms, ax, ay, aw, ah);
+    barY = ay + ah * BAR_IN_SPRITE;
+  }
+
+  // ================================================================
+  // 3) 속도계 — 코드로 그린다 (숫자가 매 프레임 바뀌므로)
+  // ================================================================
+  const gw = 13 * u, gh = 6.6 * u;
+  const gx = W / 2 + sway, gy = barY - gh - 1.5 * u;
   ctx.beginPath();
-  ctx.ellipse(cx, wheelCy, wheelRx + OL * 0.5, wheelRy + OL * 0.5, 0, 0, Math.PI * 2);
+  if (ctx.roundRect) ctx.roundRect(gx - gw / 2, gy, gw, gh, 1.2 * u);
+  else ctx.rect(gx - gw / 2, gy, gw, gh);
   ctx.fillStyle = "#0a0a0a";
   ctx.fill();
-
-  // 타이어 본체
-  ctx.beginPath();
-  ctx.ellipse(cx, wheelCy, wheelRx, wheelRy, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "#1e2024";
-  ctx.fill();
-
-  // 타이어 트레드 (속도에 맞춰 흘러감)
-  ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(cx, wheelCy, wheelRx, wheelRy, 0, 0, Math.PI * 2);
-  ctx.clip();
-  const tread = mod(disp.dist * 40, 3.2) * u;
-  ctx.fillStyle = "rgba(255,255,255,0.06)";
-  for (let yy = wheelCy - wheelRy + tread; yy < by + 20 * u; yy += 3.2 * u) {
-    ctx.fillRect(cx - wheelRx * 0.6, yy, wheelRx * 1.2, 0.7 * u);
-  }
-  // 림 하이라이트
-  ctx.fillStyle = "rgba(255,255,255,0.12)";
-  ctx.fillRect(cx - wheelRx * 0.85, wheelCy - wheelRy, wheelRx * 0.22, wheelRy * 2);
-  // 가운데 하이라이트 (림 반사)
-  ctx.fillStyle = "rgba(200,220,255,0.08)";
-  ctx.fillRect(cx - wheelRx * 0.15, wheelCy - wheelRy * 0.7, wheelRx * 0.3, wheelRy * 1.4);
-  ctx.restore();
-
-  // ================================================================
-  // 2) 무릎 (크랭크 각도 연동)
-  // ================================================================
-  for (const side of [-1, 1]) {
-    const a = disp.angle + (side < 0 ? 0 : Math.PI);
-    const lift = (1 - Math.cos(a)) / 2;   // 0(아래) ~ 1(위)
-    const ky = by + 10 * u - lift * 24 * u;
-    const kx = cx + side * (13 + lift * 2) * u;
-
-    // --- 허벅지 (반바지) ---
-    const thighTop = ky + 3.6 * u;
-    const thighBot = by + 26 * u;
-    const thighW = 6.8 * u;
-
-    // 외곽선 먼저
-    ctx.beginPath();
-    ctx.moveTo(kx - thighW - OL * 0.3, thighTop);
-    ctx.lineTo(kx + thighW + OL * 0.3, thighTop);
-    ctx.lineTo(kx + side * 3 * u + 9.5 * u, thighBot);
-    ctx.lineTo(kx + side * 3 * u - 9.5 * u, thighBot);
-    ctx.closePath();
-    ctx.fillStyle = SHORTS.outline;
-    ctx.fill();
-
-    // 반바지 본체 (셀 셰이딩)
-    ctx.beginPath();
-    ctx.moveTo(kx - thighW, thighTop);
-    ctx.lineTo(kx + thighW, thighTop);
-    ctx.lineTo(kx + side * 3 * u + 9 * u, thighBot);
-    ctx.lineTo(kx + side * 3 * u - 9 * u, thighBot);
-    ctx.closePath();
-    ctx.fillStyle = cellGrad(kx, thighTop, thighBot, SHORTS.highlight, SHORTS.base, SHORTS.shadow);
-    ctx.fill();
-
-    // 반바지 밑단 라인 (디테일)
-    ctx.strokeStyle = SHORTS.highlight;
-    ctx.lineWidth = OL_THIN;
-    ctx.beginPath();
-    ctx.moveTo(kx - thighW + 0.5 * u, thighTop + 1 * u);
-    ctx.lineTo(kx + thighW - 0.5 * u, thighTop + 1 * u);
-    ctx.stroke();
-
-    // 반바지 사이드 스트라이프 (저지 색 포인트)
-    ctx.fillStyle = JERSEY.base;
-    ctx.globalAlpha = 0.4;
-    ctx.fillRect(
-      kx + side * (thighW - 1.2 * u), thighTop + 2 * u,
-      side * 1.0 * u, (thighBot - thighTop) * 0.5
-    );
-    ctx.globalAlpha = 1;
-
-    // --- 무릎 (피부) ---
-    // 외곽선
-    ctx.beginPath();
-    ctx.ellipse(kx, ky + 1.5 * u, 6.6 * u, 3.3 * u, 0, Math.PI, 0);
-    ctx.lineTo(kx + 6.8 * u, ky + 4.2 * u);
-    ctx.lineTo(kx - 6.8 * u, ky + 4.2 * u);
-    ctx.closePath();
-    ctx.fillStyle = SKIN.outline;
-    ctx.fill();
-
-    // 무릎 본체 (셀 셰이딩)
-    ctx.beginPath();
-    ctx.ellipse(kx, ky + 1.5 * u, 6.2 * u, 3 * u, 0, Math.PI, 0);
-    ctx.lineTo(kx + 6.4 * u, ky + 4 * u);
-    ctx.lineTo(kx - 6.4 * u, ky + 4 * u);
-    ctx.closePath();
-    ctx.fillStyle = cellGrad(kx, ky - 1 * u, ky + 4 * u, SKIN.highlight, SKIN.base, SKIN.shadow);
-    ctx.fill();
-
-    // 무릎 하이라이트 (반사광 — 모바일 게임 특유의 광택)
-    ctx.fillStyle = "rgba(255,255,255,0.18)";
-    ctx.beginPath();
-    ctx.ellipse(kx - side * 1.5 * u, ky + 0.8 * u, 2.5 * u, 1.3 * u, side * 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 무릎뼈 그림자 (은은하게)
-    ctx.fillStyle = "rgba(0,0,0,0.10)";
-    ctx.beginPath();
-    ctx.ellipse(kx + side * 2 * u, ky + 1.8 * u, 2.2 * u, 1.2 * u, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // ================================================================
-  // 3) 자전거 프레임 (탑튜브 + 헤드튜브 + 스템)
-  // ================================================================
-  // 헤드튜브 외곽선
-  ctx.beginPath();
-  ctx.moveTo(cx - 2.6 * u, by - 28 * u);
-  ctx.lineTo(cx + 2.6 * u, by - 28 * u);
-  ctx.lineTo(cx + 4 * u, by + 2 * u);
-  ctx.lineTo(cx - 4 * u, by + 2 * u);
-  ctx.closePath();
-  ctx.fillStyle = "#0a0c10";
-  ctx.fill();
-
-  // 헤드튜브 본체 (셀 셰이딩 — 카본 느낌)
-  ctx.beginPath();
-  ctx.moveTo(cx - 2.2 * u, by - 27 * u);
-  ctx.lineTo(cx + 2.2 * u, by - 27 * u);
-  ctx.lineTo(cx + 3.6 * u, by + 1 * u);
-  ctx.lineTo(cx - 3.6 * u, by + 1 * u);
-  ctx.closePath();
-  const frameFill = cellGrad(cx, by - 27 * u, by + 1 * u, "#3a3e48", "#252830", "#16181c");
-  ctx.fillStyle = frameFill;
-  ctx.fill();
-  // 카본 하이라이트 라인
-  ctx.strokeStyle = "rgba(255,255,255,0.15)";
-  ctx.lineWidth = 0.7 * u;
-  ctx.beginPath();
-  ctx.moveTo(cx - 1.5 * u, by - 26 * u);
-  ctx.lineTo(cx - 2.5 * u, by);
-  ctx.stroke();
-
-  // 스템 (핸들바 아래)
-  ctx.fillStyle = "#1d2025";
-  ctx.beginPath();
-  ctx.moveTo(cx - 2.2 * u, by - 35 * u);
-  ctx.lineTo(cx + 2.2 * u, by - 35 * u);
-  ctx.lineTo(cx + 3 * u, by - 24 * u);
-  ctx.lineTo(cx - 3 * u, by - 24 * u);
-  ctx.closePath();
-  fillAndStroke("#1d2025", "#0a0c10", OL_THIN);
-
-  // ================================================================
-  // 4) 핸들바
-  // ================================================================
-  const barY = by - 30 * u;
-
-  // 핸들바 외곽선 (두꺼운 라인)
-  ctx.strokeStyle = "#0a0a0a";
-  ctx.lineWidth = 3.2 * u;
-  ctx.beginPath();
-  ctx.moveTo(cx - 22 * u, barY - 3 * u);
-  ctx.quadraticCurveTo(cx - 20 * u, barY + 1.2 * u, cx - 12 * u, barY + 0.8 * u);
-  ctx.lineTo(cx + 12 * u, barY + 0.8 * u);
-  ctx.quadraticCurveTo(cx + 20 * u, barY + 1.2 * u, cx + 22 * u, barY - 3 * u);
-  ctx.stroke();
-
-  // 핸들바 본체
-  ctx.strokeStyle = TAPE;
-  ctx.lineWidth = 2.4 * u;
-  ctx.beginPath();
-  ctx.moveTo(cx - 22 * u, barY - 3 * u);
-  ctx.quadraticCurveTo(cx - 20 * u, barY + 1.2 * u, cx - 12 * u, barY + 0.8 * u);
-  ctx.lineTo(cx + 12 * u, barY + 0.8 * u);
-  ctx.quadraticCurveTo(cx + 20 * u, barY + 1.2 * u, cx + 22 * u, barY - 3 * u);
-  ctx.stroke();
-
-  // 핸들바 하이라이트
-  ctx.strokeStyle = "rgba(255,255,255,0.12)";
-  ctx.lineWidth = 0.5 * u;
-  ctx.beginPath();
-  ctx.moveTo(cx - 11 * u, barY + 0.2 * u);
-  ctx.lineTo(cx + 11 * u, barY + 0.2 * u);
-  ctx.stroke();
-
-  // 스템 클램프
-  ctx.beginPath();
-  ctx.roundRect
-    ? ctx.roundRect(cx - 2.8 * u, barY - 2 * u, 5.6 * u, 4.6 * u, 0.6 * u)
-    : ctx.rect(cx - 2.8 * u, barY - 2 * u, 5.6 * u, 4.6 * u);
-  fillAndStroke("#2a2e35", "#0a0c10", OL_THIN);
-  // 볼트 디테일
-  for (const dy of [-0.6, 1.2]) {
-    ctx.fillStyle = "#444850";
-    ctx.beginPath();
-    ctx.arc(cx, barY + dy * u, 0.5 * u, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // ================================================================
-  // 5) 속도계 (스템 마운트)
-  // ================================================================
-  const gw = 13 * u, gh = 6.6 * u, gy = barY - 9.8 * u;
-
-  // 마운트 바
-  ctx.fillStyle = "#1a1e24";
-  ctx.fillRect(cx - 1.2 * u, gy + gh - 0.5 * u, 2.4 * u, 4.2 * u);
-
-  // 속도계 외곽선
-  ctx.beginPath();
-  ctx.roundRect
-    ? ctx.roundRect(cx - gw / 2 - OL * 0.3, gy - OL * 0.3, gw + OL * 0.6, gh + OL * 0.6, 1.4 * u)
-    : ctx.rect(cx - gw / 2 - OL * 0.3, gy - OL * 0.3, gw + OL * 0.6, gh + OL * 0.6);
-  ctx.fillStyle = "#0a0a0a";
-  ctx.fill();
-
-  // 속도계 본체
-  ctx.beginPath();
-  ctx.roundRect
-    ? ctx.roundRect(cx - gw / 2, gy, gw, gh, 1.2 * u)
-    : ctx.rect(cx - gw / 2, gy, gw, gh);
-  ctx.fillStyle = "#121418";
-  ctx.fill();
-
-  // LCD 화면
+  ctx.strokeStyle = "#000"; ctx.lineWidth = OL_THIN; ctx.stroke();
   ctx.fillStyle = "#c9d6c4";
-  ctx.fillRect(cx - gw / 2 + 0.8 * u, gy + 0.8 * u, gw - 1.6 * u, gh - 1.6 * u);
-
-  // 속도 텍스트
+  ctx.fillRect(gx - gw / 2 + 0.9 * u, gy + 0.9 * u, gw - 1.8 * u, gh - 1.8 * u);
   ctx.fillStyle = "#1b2219";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.font = `700 ${Math.round(3.3 * u)}px ${NUM_FONT}`;
-  ctx.fillText(disp.speed.toFixed(1), cx - 1.6 * u, gy + gh * 0.52);
+  ctx.fillText(disp.speed.toFixed(1), gx - 1.6 * u, gy + gh * 0.5);
   ctx.font = `600 ${Math.round(1.25 * u)}px system-ui`;
-  ctx.fillText("km/h", cx + 4 * u, gy + gh * 0.72);
-
-  // LCD 반사광 (모바일 게임 느낌)
-  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  ctx.fillText("km/h", gx + 4 * u, gy + gh * 0.72);
+  ctx.fillStyle = "rgba(255,255,255,0.10)";   // 유리 반사
   ctx.beginPath();
-  ctx.moveTo(cx - gw / 2 + 1 * u, gy + 1 * u);
-  ctx.lineTo(cx + gw / 2 - 1 * u, gy + 1 * u);
-  ctx.lineTo(cx + gw / 2 - 3 * u, gy + gh * 0.4);
-  ctx.lineTo(cx - gw / 2 + 1 * u, gy + gh * 0.4);
-  ctx.closePath();
-  ctx.fill();
+  ctx.moveTo(gx - gw / 2 + 1.1 * u, gy + 1.1 * u);
+  ctx.lineTo(gx + gw / 2 - 1.1 * u, gy + 1.1 * u);
+  ctx.lineTo(gx + gw / 2 - 3 * u, gy + gh * 0.42);
+  ctx.lineTo(gx - gw / 2 + 1.1 * u, gy + gh * 0.42);
+  ctx.closePath(); ctx.fill();
 
   // ================================================================
-  // 6) 팔 + 장갑 (메인 비주얼!)
-  // ================================================================
-  for (const s of [-1, 1]) {
-    const hx = cx + s * 21 * u, hy = barY - 2.2 * u;     // 손 (후드 위)
-    const ex = cx + s * 33 * u, ey = by - 4 * u;          // 팔꿈치
-    const sx = cx + s * 44 * u, sy = by + 16 * u;         // 어깨
-
-    // --- 방향 벡터 (팔뚝) ---
-    const nx = -(hy - ey), ny = hx - ex, nl = Math.hypot(nx, ny);
-    const px = nx / nl, py = ny / nl;
-
-    // =====================
-    // 6-a) 소매 (저지 색)
-    // =====================
-    // 소매 외곽선
-    ctx.strokeStyle = JERSEY.outline;
-    ctx.lineWidth = 16 * u;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(lerp(sx, ex, 0.84), lerp(sy, ey, 0.84));
-    ctx.stroke();
-
-    // 소매 본체
-    ctx.strokeStyle = JERSEY.base;
-    ctx.lineWidth = 15 * u;
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(lerp(sx, ex, 0.82), lerp(sy, ey, 0.82));
-    ctx.stroke();
-
-    // 소매 그림자 (아래쪽)
-    ctx.strokeStyle = JERSEY.shadow;
-    ctx.lineWidth = 15 * u;
-    ctx.lineCap = "butt";
-    ctx.beginPath();
-    ctx.moveTo(lerp(sx, ex, 0.4), lerp(sy, ey, 0.4));
-    ctx.lineTo(lerp(sx, ex, 0.82), lerp(sy, ey, 0.82));
-    ctx.stroke();
-    ctx.lineCap = "round";
-
-    // 소매 줄무늬 (브랜드 포인트)
-    ctx.strokeStyle = o.stripe || "#ffffff";
-    ctx.lineWidth = 15.2 * u;
-    ctx.lineCap = "butt";
-    ctx.beginPath();
-    ctx.moveTo(lerp(sx, ex, 0.68), lerp(sy, ey, 0.68));
-    ctx.lineTo(lerp(sx, ex, 0.74), lerp(sy, ey, 0.74));
-    ctx.stroke();
-    ctx.lineCap = "round";
-
-    // 소매 하이라이트 (윗면)
-    ctx.strokeStyle = JERSEY.highlight;
-    ctx.globalAlpha = 0.3;
-    ctx.lineWidth = 5 * u;
-    ctx.beginPath();
-    ctx.moveTo(lerp(sx, ex, 0.1), lerp(sy, ey, 0.1));
-    ctx.lineTo(lerp(sx, ex, 0.6), lerp(sy, ey, 0.6));
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-
-    // =====================
-    // 6-b) 팔뚝 (피부)
-    // =====================
-    const armW_e = 6.5 * u;   // 팔꿈치 쪽 (가까우니까 굵게)
-    const armW_h = 3.2 * u;   // 손목 쪽 (멀으니까 가늘게)
-
-    // 팔뚝 외곽선
-    ctx.beginPath();
-    ctx.moveTo(ex + px * (armW_e + OL * 0.4), ey + py * (armW_e + OL * 0.4));
-    ctx.lineTo(hx + px * (armW_h + OL * 0.4), hy + py * (armW_h + OL * 0.4));
-    ctx.lineTo(hx - px * (armW_h + OL * 0.4), hy - py * (armW_h + OL * 0.4));
-    ctx.lineTo(ex - px * (armW_e + OL * 0.4), ey - py * (armW_e + OL * 0.4));
-    ctx.closePath();
-    ctx.fillStyle = SKIN.outline;
-    ctx.fill();
-
-    // 팔뚝 본체 (셀 셰이딩)
-    ctx.beginPath();
-    ctx.moveTo(ex + px * armW_e, ey + py * armW_e);
-    ctx.lineTo(hx + px * armW_h, hy + py * armW_h);
-    ctx.lineTo(hx - px * armW_h, hy - py * armW_h);
-    ctx.lineTo(ex - px * armW_e, ey - py * armW_e);
-    ctx.closePath();
-    ctx.fillStyle = cellGrad(
-      (hx + ex) / 2, Math.min(hy, ey), Math.max(hy, ey),
-      SKIN.highlight, SKIN.base, SKIN.shadow
-    );
-    ctx.fill();
-
-    // 팔뚝 하이라이트 (모바일 게임 특유의 림 라이트)
-    const rimSide = s > 0 ? 1 : -1;
-    ctx.fillStyle = "rgba(255,240,220,0.15)";
-    ctx.beginPath();
-    ctx.moveTo(ex + px * armW_e * rimSide * 0.9, ey + py * armW_e * rimSide * 0.9);
-    ctx.lineTo(hx + px * armW_h * rimSide * 0.9, hy + py * armW_h * rimSide * 0.9);
-    ctx.lineTo(hx + px * armW_h * rimSide * 0.4, hy + py * armW_h * rimSide * 0.4);
-    ctx.lineTo(ex + px * armW_e * rimSide * 0.4, ey + py * armW_e * rimSide * 0.4);
-    ctx.closePath();
-    ctx.fill();
-
-    // 팔꿈치 → 소매 전환부 (그림자)
-    ctx.fillStyle = "rgba(0,0,0,0.12)";
-    ctx.beginPath();
-    ctx.ellipse(
-      lerp(ex, hx, -0.08), lerp(ey, hy, -0.08),
-      armW_e * 1.1, armW_e * 0.4,
-      Math.atan2(hy - ey, hx - ex), 0, Math.PI * 2
-    );
-    ctx.fill();
-
-    // =====================
-    // 6-c) 장갑 (핵심 비주얼!)
-    // =====================
-
-    // 브레이크 후드 (장갑 아래에 살짝 보임)
-    ctx.fillStyle = "#15171a";
-    ctx.beginPath();
-    ctx.ellipse(hx + s * 0.4 * u, hy - 2.6 * u, 1.8 * u, 2.6 * u, s * 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 장갑 전체 실루엣 외곽선
-    ctx.fillStyle = GLOVE.outline;
-    ctx.beginPath();
-    ctx.ellipse(hx, hy + 0.4 * u, 4.6 * u, 4.2 * u, s * 0.45, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 장갑 본체 (셀 셰이딩)
-    const gloveFill = cellGrad(hx, hy - 3 * u, hy + 4 * u, GLOVE.highlight, GLOVE.base, GLOVE.shadow);
-    ctx.fillStyle = gloveFill;
-    ctx.beginPath();
-    ctx.ellipse(hx, hy + 0.4 * u, 4.2 * u, 3.8 * u, s * 0.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 너클 (관절 돌기 — 3개)
-    for (let k = -1; k <= 1; k++) {
-      // 너클 하이라이트 (위)
-      ctx.fillStyle = GLOVE.highlight;
-      ctx.beginPath();
-      ctx.ellipse(
-        hx + k * 1.4 * u - s * 0.5 * u, hy - 2.0 * u,
-        1.0 * u, 0.55 * u, 0, 0, Math.PI * 2
-      );
-      ctx.fill();
-      // 너클 그림자 (아래)
-      ctx.fillStyle = GLOVE.shadow;
-      ctx.beginPath();
-      ctx.ellipse(
-        hx + k * 1.4 * u - s * 0.5 * u, hy - 1.3 * u,
-        0.9 * u, 0.4 * u, 0, 0, Math.PI * 2
-      );
-      ctx.fill();
-    }
-
-    // 손가락 관절선 (스티칭 디테일)
-    ctx.strokeStyle = GLOVE.accent;
-    ctx.lineWidth = OL_THIN * 0.6;
-    for (let k = -1; k <= 1; k++) {
-      ctx.beginPath();
-      ctx.arc(
-        hx + k * 1.4 * u - s * 0.5 * u, hy - 1.6 * u,
-        0.7 * u, 0, Math.PI
-      );
-      ctx.stroke();
-    }
-
-    // 장갑 로고 (저지 색 포인트)
-    ctx.fillStyle = GLOVE.logo;
-    ctx.globalAlpha = 0.5;
-    ctx.beginPath();
-    ctx.ellipse(
-      hx - s * 0.3 * u, hy + 1.2 * u,
-      1.5 * u, 0.8 * u, s * 0.3, 0, Math.PI * 2
-    );
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // 장갑 메시 패턴 (통풍구 느낌)
-    ctx.strokeStyle = "rgba(255,255,255,0.06)";
-    ctx.lineWidth = 0.3 * u;
-    for (let k = -2; k <= 2; k++) {
-      ctx.beginPath();
-      ctx.moveTo(hx + k * 1.2 * u, hy - 3 * u);
-      ctx.lineTo(hx + k * 1.2 * u + s * 0.5 * u, hy + 2 * u);
-      ctx.stroke();
-    }
-
-    // 장갑 전체 하이라이트 (모바일 게임 광택)
-    ctx.fillStyle = "rgba(255,255,255,0.14)";
-    ctx.beginPath();
-    ctx.ellipse(
-      hx - s * 1.2 * u, hy - 0.8 * u,
-      2.2 * u, 1.2 * u, s * 0.35, 0, Math.PI * 2
-    );
-    ctx.fill();
-
-    // 벨크로 밴드 (손목)
-    ctx.fillStyle = "#333338";
-    ctx.beginPath();
-    const wristX = hx + s * 1 * u, wristY = hy + 2.8 * u;
-    ctx.ellipse(wristX, wristY, 3.5 * u, 1.2 * u, s * 0.45, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = GLOVE.outline;
-    ctx.lineWidth = OL_THIN * 0.7;
-    ctx.stroke();
-    // 벨크로 디테일
-    ctx.fillStyle = "#444448";
-    ctx.beginPath();
-    ctx.ellipse(wristX - s * 0.5 * u, wristY - 0.2 * u, 1.8 * u, 0.6 * u, s * 0.45, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // ================================================================
-  // 7) 방어막 효과 (아케이드)
+  // 4) 방어막 (아케이드)
   // ================================================================
   if (o.bubble) {
     const g = ctx.createRadialGradient(W / 2, H * 0.55, H * 0.35, W / 2, H * 0.55, W * 0.7);
@@ -562,10 +256,7 @@ function drawCockpit(now, o) {
   ctx.restore();
 }
 
-// ============================================================
-// shadeColor: hex 색상의 밝기를 percent%만큼 조절
-// drawCockpit 바깥에 선언해야 함 (또는 전역 유틸)
-// ============================================================
+// hex 색상의 밝기를 percent%만큼 조절
 function shadeColor(hex, percent) {
   if (!hex || hex.charAt(0) !== "#") return hex;
   let r = parseInt(hex.slice(1, 3), 16);
