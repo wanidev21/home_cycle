@@ -815,11 +815,23 @@ function connectWS() {
 ```
 재연결되면 서버 상태(`state`)를 그대로 받아 이어서 표시 (게임은 서버에서 계속 돌고 있음).
 
+## 디자인 협업
+
+디자인 담당(클로디)은 claude.ai **채팅**이라 파일 시스템도 git도 없다 — 저장소를 클론하거나
+커밋할 수 없고, "파일에 반영했다"고 해도 실제로는 그쪽 채팅 안의 코드다 (2026-09-21 실제 사례).
+**완료 보고를 받으면 먼저 `git status`와 grep으로 확인하고, 없으면 사양대로 직접 구현한다.**
+
+넘길 자료는 `docs/DESIGN-CONTEXT.md` (토큰·화면 id·레이아웃 좌표·이벤트·테마 요약).
+`game.html` 2,300줄을 통째로 넘기지 않는다. 문서에 적힌 id/토큰이 실제로 있는지
+`tests/test_design_context.py`가 검사하므로 문서가 조용히 낡지 않는다.
+
 ## 프로젝트 구조
 
 ```
 cycle/
 ├── CLAUDE.md
+├── docs/
+│   └── DESIGN-CONTEXT.md  # 디자인 담당에게 넘기는 요약본
 ├── main.py
 ├── pedalquest/
 │   ├── __init__.py
