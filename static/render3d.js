@@ -898,8 +898,10 @@ function placeRiders(fp) {
     for (const side of [-1, 1]) {
       const ang = r.a + (side < 0 ? 0 : Math.PI);
       const hy = py + RD.hipY - 0.06, hz = pz + RD.hipZ;
+      // 선수는 -z로 달린다. 각도가 커질 때 페달이 "위 → 앞(-z) → 아래 → 뒤(+z)"로 돌아야
+      // 앞으로 밟는 것이다. z에 +sin을 쓰면 순서가 뒤집혀 뒤로 밟는 것처럼 보인다.
       const ppy = py + RD.crankY + Math.cos(ang) * RD.pedalR;
-      const ppz = pz + RD.crankZ + Math.sin(ang) * RD.pedalR;
+      const ppz = pz + RD.crankZ - Math.sin(ang) * RD.pedalR;
       const [ky, kz] = kneeAt(hy, hz, ppy, ppz);
       const hx = px + side * RD.hipX * sp.hip;
       putLimb("riderThigh", hx, hy, hz, ky, kz, sp.leg);
