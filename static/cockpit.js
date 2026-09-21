@@ -25,11 +25,15 @@ for (const [key, url] of Object.entries(COCKPIT_SPRITES)) {
 }
 // naturalWidth는 로드가 끝나야 0이 아니다 → 이 한 줄이 "쓸 수 있나"의 전부
 const usable = (img) => !!(img && !img.missing && img.naturalWidth);
-// 무릎 PNG는 배경이 지워진 것만 쓴다 (지금 것은 도로와 핸들바가 같이 찍혀 있다)
-const KNEE_SPRITES_READY = false;
-// 코드로 그린 무릎은 일러스트 팔과 화풍이 안 맞아 오히려 눈에 걸린다.
-// 배경 없는 다리 PNG가 생기면 KNEE_SPRITES_READY와 함께 켠다.
-const SHOW_KNEES = false;
+const SHOW_KNEES = true;
+// 무릎 스프라이트 배치. 그림 속 무릎은 가로 63% / 세로 70% 지점에 있다.
+const KNEE_WIDTH = 0.44;        // 화면 폭 대비
+const KNEE_AT_X = 0.15;         // 화면 가운데에서 좌우로 이만큼
+const KNEE_AT_Y = 0.93;         // 페달이 아래일 때의 무릎 높이 (낮게 — 높으면 반바지가 바 위로 올라온다)
+const KNEE_LIFT = 0.085;        // 페달이 위로 올 때 들리는 양
+const KNEE_IN_SPRITE_X = 0.63;
+const KNEE_IN_SPRITE_Y = 0.70;
+const KNEE_CLIP_ABOVE = 2;      // 핸들바보다 이만큼(u) 위까지만 무릎이 보인다
 // 팔 스프라이트 배치. 그림 속 핸들바는 이미지 높이의 약 54% 지점에 있다.
 const ARMS_WIDTH = 0.74;     // 화면 폭 대비
 const BAR_AT_Y = 0.70;       // 핸들바가 놓일 화면 높이 (0=위, 1=아래)
@@ -98,22 +102,42 @@ function drawCockpit(now, o) {
     return g;
   }
 
+  // 팔 스프라이트 위치를 먼저 잡는다. 무릎을 어디서 자를지(핸들바 높이) 알아야 한다.
+  const arms = cockpitImg.arms;
+  const armsOk = usable(arms);
+  const aw = W * ARMS_WIDTH;
+  const ah = armsOk ? aw * (arms.naturalHeight / arms.naturalWidth) : 0;
+  const ax = W / 2 - aw / 2 + sway * 1.2;
+  const ay = H * BAR_AT_Y - ah * BAR_IN_SPRITE + buzz;
+  const barY = armsOk ? ay + ah * BAR_IN_SPRITE : by - 30 * u;
+
   // ================================================================
   // 1) 무릎 — 팔보다 먼저 (팔이 위에 와야 한다)
   // ================================================================
   if (!SHOW_KNEES) {
     // 그려 넣지 않는다 (아래 주석 참고)
-  } else if (KNEE_SPRITES_READY && usable(cockpitImg.kneeL) && usable(cockpitImg.kneeR)) {
+  } else if (usable(cockpitImg.kneeL) && usable(cockpitImg.kneeR)) {
+    // 바 위로 삐져나온 반바지는 자른다. 실제로도 핸들바가 허벅지를 가린다.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, barY - KNEE_CLIP_ABOVE * u, W, H);
+    ctx.clip();
     for (const side of [-1, 1]) {
-      const img = side < 0 ? cockpitImg.kneeL : cockpitImg.kneeR;
+      // knee-left.png는 다리가 그림의 *오른쪽*에 있다 → 화면 오른쪽에 쓴다.
+      // 두 장은 서로 좌우 반전본이라 반대쪽은 knee-right.png가 맞는다.
+      const img = side < 0 ? cockpitImg.kneeR : cockpitImg.kneeL;
       const a = disp.angle + (side < 0 ? 0 : Math.PI);
-      const lift = (1 - Math.cos(a)) / 2;
-      const kh = H * 0.55, kw = kh * (img.naturalWidth / img.naturalHeight);
-      const kx = W / 2 + side * W * 0.16 - kw / 2 + sway;
-      const ky = H - kh * 0.35 + buzz - lift * H * 0.12;
-      const dance = climbing ? Math.sin(a) * W * 0.02 : 0;
+      const lift = (1 - Math.cos(a)) / 2;            // 0(페달 아래) ~ 1(위)
+      const kw = W * KNEE_WIDTH;
+      const kh = kw * (img.naturalHeight / img.naturalWidth);
+      // 그림 속 무릎이 화면의 목표 지점에 오도록 역산 (팔 스프라이트와 같은 방식)
+      const ankX = side < 0 ? 1 - KNEE_IN_SPRITE_X : KNEE_IN_SPRITE_X;
+      const kx = W * (0.5 + side * KNEE_AT_X) - kw * ankX + sway;
+      const ky = H * KNEE_AT_Y - kh * KNEE_IN_SPRITE_Y + buzz - lift * H * KNEE_LIFT;
+      const dance = climbing ? Math.sin(a) * W * 0.018 : 0;
       ctx.drawImage(img, kx + dance, ky, kw, kh);
     }
+    ctx.restore();
   } else {
     // ================================================================
     for (const side of [-1, 1]) {
@@ -201,18 +225,9 @@ function drawCockpit(now, o) {
   // ================================================================
   // 2) 팔 + 손 + 핸들바 (스프라이트)
   // ================================================================
-  const arms = cockpitImg.arms;
-  let barY = by - 30 * u;                 // 속도계를 올릴 핸들바 높이
-  if (usable(arms)) {
-    // 화면 높이로 맞추면 팔이 화면을 다 덮는다. 폭으로 맞추고, 그림 속 핸들바가
-    // 화면의 BAR_AT_Y 높이에 오도록 세로 위치를 역산한다.
-    const aw = W * ARMS_WIDTH;
-    const ah = aw * (arms.naturalHeight / arms.naturalWidth);
-    const ax = W / 2 - aw / 2 + sway * 1.2;
-    const ay = H * BAR_AT_Y - ah * BAR_IN_SPRITE + buzz;
-    ctx.drawImage(arms, ax, ay, aw, ah);
-    barY = ay + ah * BAR_IN_SPRITE;
-  }
+  // 화면 높이로 맞추면 팔이 화면을 다 덮는다. 폭으로 맞추고, 그림 속 핸들바가
+  // 화면의 BAR_AT_Y 높이에 오도록 세로 위치를 역산했다 (위에서 계산).
+  if (armsOk) ctx.drawImage(arms, ax, ay, aw, ah);
 
   // ================================================================
   // 3) 속도계 — 코드로 그린다 (숫자가 매 프레임 바뀌므로)

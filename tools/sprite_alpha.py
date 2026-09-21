@@ -25,18 +25,45 @@ try:
 except ImportError:
     sys.exit("Pillow가 필요합니다:  .venv\\Scripts\\python -m pip install pillow")
 
-NEUTRAL_TOL = 14      # r,g,b가 이만큼 안에서 같으면 무채색
-BG_FLOOR = 169        # 이보다 밝은 무채색은 배경 후보
+NEUTRAL_TOL = 20      # r,g,b가 이만큼 안에서 같으면 무채색 (원본 노이즈 감안)
+BG_FLOOR = 150        # 이보다 밝은 무채색은 배경 후보. 테두리를 보고 자동 조정된다
 MIN_POCKET = 150      # 갇힌 조각이 이보다 크면 배경으로 본다
 SPECKLE_R = 2
 SPECKLE_NEED = 0.62   # 주변 5x5의 이 비율이 배경이면 잔재로 본다
+
+
+_floor = BG_FLOOR
 
 
 def bg_like(p):
     if p[3] == 0:
         return False
     r, g, b = p[:3]
-    return max(r, g, b) - min(r, g, b) < NEUTRAL_TOL and (r + g + b) / 3 >= BG_FLOOR
+    return max(r, g, b) - min(r, g, b) < NEUTRAL_TOL and (r + g + b) / 3 >= _floor
+
+
+def pick_floor(px, w, h):
+    """테두리를 보고 배경 밝기의 하한을 정한다.
+
+    고정값을 쓰면 배경이 조금만 어두워도(원본에 따라 150까지 내려간다)
+    flood fill이 거기서 막혀 체크무늬가 절반만 지워진다.
+    """
+    vals = []
+    for x in range(0, w, 2):
+        for y in (0, h - 1):
+            p = px[x, y]
+            if max(p[:3]) - min(p[:3]) < NEUTRAL_TOL:
+                vals.append(sum(p[:3]) / 3)
+    for y in range(0, h, 2):
+        for x in (0, w - 1):
+            p = px[x, y]
+            if max(p[:3]) - min(p[:3]) < NEUTRAL_TOL:
+                vals.append(sum(p[:3]) / 3)
+    if not vals:
+        return BG_FLOOR
+    vals.sort()
+    low = vals[len(vals) // 20]          # 아래쪽 5%
+    return max(120, min(BG_FLOOR, low - 12))
 
 
 def flood_from_edges(px, w, h):
@@ -118,16 +145,18 @@ def clear_speckles(px, w, h):
 
 
 def strip(path: Path):
+    global _floor
     im = Image.open(path).convert("RGBA")
     w, h = im.size
     px = im.load()
+    _floor = pick_floor(px, w, h)
     edge = flood_from_edges(px, w, h)
     pocket = clear_pockets(px, w, h)
     speck = clear_speckles(px, w, h)
     im.save(path)
     total = edge + pocket + speck
-    print(f"{path.name}: {w}x{h}  배경 {edge} + 갇힌 조각 {pocket} + 잔재 {speck}"
-          f"  = {total}px ({100 * total / (w * h):.0f}%)")
+    print(f"{path.name}: {w}x{h}  하한 {_floor:.0f}  배경 {edge} + 갇힌 조각 {pocket}"
+          f" + 잔재 {speck} = {total}px ({100 * total / (w * h):.0f}%)")
 
 
 if __name__ == "__main__":
