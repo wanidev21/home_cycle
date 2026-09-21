@@ -12,13 +12,15 @@ const FOG_NEAR = 40;
 const FOG_SPAN = 0.92;   // 안개 끝 = 그리는 거리 × 이 비율 (끊긴 데가 안 보이게)
 // 태블릿(PowerVR GE8320)마다 성능이 달라 미리 정할 수 없다 → 실제 프레임 시간을 보고 조절한다.
 const FPS_TARGET_LOW = 27, FPS_TARGET_HIGH = 45;
-const PIXEL_STEPS = [0.9, 0.75, 0.62, 0.5];
+const PIXEL_STEPS = [0.9, 0.75, 0.62, 0.5, 0.4];
 // 터치 기기는 보수적으로 시작해서 여유가 있으면 올라간다 (첫 몇 초가 버벅이지 않게)
 const COARSE = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 let drawN = COARSE ? 120 : N;   // 지금 그리는 세그먼트 수
 let pixelStep = COARSE ? 1 : 0; // PIXEL_STEPS 인덱스 (터치 기기)
 let frameMs = 16.7;      // 지수 이동평균
 let qualityAt = 0;       // 마지막으로 품질을 바꾼 시각
+let wakeAt3d = 0;        // 화면이 돌아온 직후 몇 프레임은 표본에서 제외
+addEventListener("visibilitychange", () => { if (!document.hidden) wakeAt3d = performance.now() + 1500; });
 const RW = 2.2;          // 도로 반폭(m) — game.html ROAD_W와 같음
 const FOV = 58;          // 2D 투영(F = 0.9H)과 같은 화각
 const PITCH = Math.atan(0.0444);   // 살짝 내려다봄 → 지평선이 화면 46% 높이 (2D와 같음)
@@ -420,10 +422,11 @@ const rgbCache = {};
 const c01 = (hex) => rgbCache[hex] || (rgbCache[hex] = hexRgb(hex).map((v) => v / 255));
 
 function adaptQuality(dt, now) {
-  // 탭이 백그라운드거나 화면이 꺼져 있으면 rAF가 1초에 한 번만 온다. 그 프레임을
-  // 성능으로 착각하면 돌아왔을 때 품질이 바닥으로 내려가 있다 → 아예 표본에서 뺀다.
-  if (dt > 0.2) { qualityAt = now; return; }
-  frameMs += (dt * 1000 - frameMs) * 0.08;
+  // 탭이 숨겨져 있으면 rAF가 1Hz로 떨어진다. 그 프레임을 성능으로 착각하면 돌아왔을 때
+  // 품질이 바닥에 고정된다 → 표본에서 뺀다. 단, dt 임계값으로 거르면 안 된다:
+  // 4~7fps인 진짜 느린 기기의 dt(0.14~0.25초)와 겹쳐서 정작 조절이 필요한 기기를 놓친다.
+  if (document.hidden || now < wakeAt3d || dt > 0.6) { qualityAt = now; return; }
+  frameMs += (dt * 1000 - frameMs) * 0.12;
   if (now - qualityAt < 1200) return;
   const fps = 1000 / frameMs;
   const coarse = COARSE;

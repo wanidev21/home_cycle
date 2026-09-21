@@ -344,6 +344,34 @@ body.portrait-touch #rotateHint { display: flex; }
   #itemBox { width: 72px; height: 72px; font-size: 42px; }
   .tip { display: none; }
 }
+/* ---------- 저사양 터치 기기 ---------- */
+/* PowerVR GE8320 태블릿에서 2D·3D 가릴 것 없이 4~7fps가 나왔다. 렌더러가 서로 다른데
+   같은 숫자라는 건 병목이 캔버스가 아니라 그 위에 얹힌 합성 레이어라는 뜻이다.
+   backdrop-filter는 매 프레임 바뀌는 캔버스를 패널마다 다시 블러하므로, 플레이 중
+   화면에 깔린 10여 개 패널이 그대로 프레임 예산을 먹는다. 터치 기기에서는 끄고,
+   대신 패널을 더 불투명하게 해서 읽기는 유지한다. */
+@media (pointer: coarse) {
+  :root {
+    --blur: none;
+    --glass: rgba(13, 17, 24, 0.88);
+    --glass-strong: rgba(13, 17, 24, 0.95);
+  }
+  .screen {
+    background: radial-gradient(120% 90% at 30% 10%, rgba(10,13,18,0.86), rgba(10,13,18,0.96) 75%);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .overlay {
+    background: rgba(6, 8, 12, 0.9);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  /* 그림자도 합성 비용이라 플레이 중 패널에서는 줄인다 */
+  .panel, .toast, .bnr { box-shadow: none; }
+}
+/* 확인용: 주소 뒤에 ?fx=on 을 붙이면 블러를 다시 켠다.
+   같은 기기에서 fps를 비교해 보면 블러가 원인인지 바로 알 수 있다. */
+html.fx-on { --blur: blur(18px) saturate(120%); }
+html.fx-on .screen { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+html.fx-on .overlay { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 </style>
 {% endraw %}
 </head>
@@ -1010,8 +1038,12 @@ const ctx = cv.getContext("2d");
 let W = 0, H = 0, DPR = 1, HORIZON = 0, F = 0;
 const bgCache = {};
 
+const COARSE = matchMedia("(pointer: coarse)").matches;
+// ?fx=on → 블러를 다시 켜서 원인 확인 (A/B). 기본은 터치 기기에서 꺼짐.
+if (new URLSearchParams(location.search).get("fx") === "on") document.documentElement.classList.add("fx-on");
+let dprScale = 1;     // 적응형: 아주 느리면 캔버스 해상도까지 낮춘다
 function resize() {
-  DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+  DPR = (COARSE ? 1 : Math.min(window.devicePixelRatio || 1, 1.5)) * dprScale;
   W = innerWidth; H = innerHeight;
   cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -1721,19 +1753,26 @@ let drawSeg = DRAW;     // 지금 그리는 세그먼트 수
 let sceneryDens = 1;    // 길가 오브젝트 밀도 (0.35~1)
 let frameMs2D = 16.7, qualityAt2D = 0;
 
+// 탭이 숨겨져 있으면 rAF가 1Hz로 떨어진다. 이건 기기가 느린 게 아니므로 표본에서 뺀다.
+// dt 임계값으로 거르면 안 된다 — 4~7fps인 진짜 느린 기기의 dt(0.14~0.25초)와 겹친다.
+let wakeAt = 0;
+addEventListener("visibilitychange", () => { if (!document.hidden) wakeAt = performance.now() + 1500; });
+const measuring = (dt, now) => !document.hidden && now > wakeAt && dt < 0.6;
+
 function adapt2D(dt, now) {
-  // 백그라운드 탭·화면 꺼짐이면 rAF가 1Hz라 그 프레임은 성능 표본이 아니다
-  if (dt > 0.2) { qualityAt2D = now; return; }
-  frameMs2D += (dt * 1000 - frameMs2D) * 0.08;
+  if (!measuring(dt, now)) { qualityAt2D = now; return; }
+  frameMs2D += (dt * 1000 - frameMs2D) * 0.12;
   if (now - qualityAt2D < 1200) return;
   const fps = 1000 / frameMs2D;
   if (fps < FPS_LOW) {
     if (sceneryDens > 0.35) sceneryDens = Math.max(0.35, sceneryDens - 0.15);
     else if (drawSeg > DRAW_MIN) drawSeg = Math.max(DRAW_MIN, drawSeg - 12);
+    else if (dprScale > 0.6) { dprScale = Math.max(0.6, dprScale - 0.2); resize(); }
     else return;
     qualityAt2D = now;
   } else if (fps > FPS_HIGH) {
-    if (drawSeg < DRAW) drawSeg = Math.min(DRAW, drawSeg + 8);
+    if (dprScale < 1) { dprScale = Math.min(1, dprScale + 0.2); resize(); }
+    else if (drawSeg < DRAW) drawSeg = Math.min(DRAW, drawSeg + 8);
     else if (sceneryDens < 1) sceneryDens = Math.min(1, sceneryDens + 0.1);
     else return;
     qualityAt2D = now;
