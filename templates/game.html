@@ -293,12 +293,13 @@ body.portrait-touch #rotateHint { display: flex; }
 #board .pos { font-family: var(--num); color: var(--muted); width: 12px; }
 #board i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 #board span.gap { margin-left: auto; color: var(--muted); font-size: 13px; font-family: var(--num); }
-/* 캔버스(#game)와 같은 층에 두되 그 아래. z-index:-1로 두면 body 배경 뒤로 숨어 검게 보인다 */
+/* z-index를 주지 않는다. DOM 순서가 곧 쌓임 순서다: 영상 → 캔버스 → 화면(.screen).
+   -1을 주면 body 배경 뒤로 숨어 검게 보이고, 캔버스에 z-index를 주면 그 캔버스가
+   메뉴 위로 올라와 화면 전체의 터치를 먹는다. */
 #ride {
   position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover;
-  background: #000; z-index: 0; display: none;
+  background: #000; display: none; pointer-events: none;
 }
-canvas#game { z-index: 1; }
 #ride.on { display: block; }
 #mirror {
   position: absolute; left: 18px; bottom: 210px; width: 164px; height: 82px;
@@ -2482,12 +2483,21 @@ function startVideoRide(course) {
   v.src = course.url;
   v.classList.add("on");
   $("game3d").classList.add("hidden");
-  v.play().catch(() => { /* 사용자 제스처 전이면 무시 — 시작 버튼에서 다시 부른다 */ });
+  // 버퍼링 동안 검은 화면만 보이면 고장 난 줄 안다 → 상태를 말해준다
+  toast(`🎥 ${course.name} 불러오는 중…`);
+  v.oncanplay = () => toast("🎥 준비됐어요 — 페달을 밟으세요");
+  v.onerror = () => {
+    toast("⚠ 영상을 재생할 수 없어요 (mp4 / H.264 인지 확인해주세요)", "gold");
+    stopVideoRide();
+    send({ command: "stop" });
+  };
+  v.play().catch(() => { /* 사용자 제스처 전이면 무시 — 곧 다시 호출된다 */ });
   send({ command: "start_free" });
 }
 function stopVideoRide() {
   videoCourse = null;
   const v = $("ride");
+  v.oncanplay = v.onerror = null;
   v.pause(); v.removeAttribute("src"); v.load();
   v.classList.remove("on");
   if (window.R3D && R3D.on) $("game3d").classList.remove("hidden");
