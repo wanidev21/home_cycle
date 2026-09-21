@@ -30,23 +30,28 @@ const BUILD_VARIANTS = [[10, 18, 12], [14, 28, 14], [8, 12, 10]];   // [폭, 높
 const T3 = {
   city: {
     sky: ["#3d7cc4", "#87ceeb", "#d4ecf6"], ground: ["#9fb596", "#98ae8f"], verge: ["#b8bcbe", "#b1b5b7"],
-    road: ["#555a61", "#52575e"], edge: "#f2f2ec", lane: "#f2cc55", sun: "#fff3da", sunI: 1.5, hemi: ["#d6ecff", "#7d8a74"], hemiI: 1.1,
+    road: ["#555a61", "#52575e"], edge: "#f2f2ec", lane: "#f2cc55", sun: "#fff3da", sunI: 1.0, hemi: ["#d6ecff", "#7d8a74"], hemiI: 0.85,
+    dir: [-20, 95, 25], fog: 1.15,     // 정오
   },
   suburb: {
     sky: ["#3f86d0", "#87ceeb", "#dcf1f8"], ground: ["#a8d08d", "#a0c886"], verge: ["#8dbe74", "#87b76e"],
-    road: ["#555a60", "#52575d"], edge: "#f4f4ee", lane: "#f2cc55", sun: "#fff3da", sunI: 1.5, hemi: ["#d6ecff", "#6f8a5f"], hemiI: 1.1,
+    road: ["#555a60", "#52575d"], edge: "#f4f4ee", lane: "#f2cc55", sun: "#fff3da", sunI: 0.95, hemi: ["#d6ecff", "#6f8a5f"], hemiI: 0.9,
+    dir: [-65, 70, 40], fog: 1.15,     // 오후, 좌상 45°
   },
   mountain: {   // 노을
     sky: ["#4a4b8c", "#ff8a5c", "#ffc79c"], ground: ["#8b5a2b", "#855628"], verge: ["#a7896a", "#a08365"],
-    road: ["#708090", "#6b7a8a"], edge: "#f6ece2", lane: "#f6ece2", sun: "#ffb27a", sunI: 1.7, hemi: ["#ffc8a8", "#5a4030"], hemiI: 0.9,
+    road: ["#708090", "#6b7a8a"], edge: "#f6ece2", lane: "#f6ece2", sun: "#ffb27a", sunI: 0.85, hemi: ["#ffc8a8", "#5a4030"], hemiI: 0.82,
+    dir: [95, 22, -15], fog: 0.8,      // 석양, 오른쪽에서 낮게
   },
   beach: {      // 아침
     sky: ["#72c8ee", "#b8ecf6", "#e0ffff"], ground: ["#f4c890", "#efc28a"], verge: ["#f8dcae", "#f3d6a8"],
-    road: ["#d3d3d3", "#cdcdcd"], edge: "#ffffff", lane: "#8a8f96", sun: "#fffbe8", sunI: 1.5, hemi: ["#e8fbff", "#c8a878"], hemiI: 1.2,
+    road: ["#d3d3d3", "#cdcdcd"], edge: "#ffffff", lane: "#8a8f96", sun: "#fffbe8", sunI: 0.9, hemi: ["#e8fbff", "#c8a878"], hemiI: 1.08,
+    dir: [-95, 28, -10], fog: 1.15,    // 아침, 왼쪽에서 낮게
   },
   night: {      // 아케이드: 레트로 신스웨이브
     sky: ["#05060a", "#0b0c10", "#241a3a"], ground: ["#1f2833", "#1c242e"], verge: ["#2a3442", "#27303d"],
-    road: ["#222222", "#202020"], edge: "#66fcf1", lane: "#ff4fd8", sun: "#b9a6ff", sunI: 0.8, hemi: ["#5a4a9a", "#101820"], hemiI: 0.9,
+    road: ["#222222", "#202020"], edge: "#66fcf1", lane: "#ff4fd8", sun: "#b9a6ff", sunI: 0.3, hemi: ["#5a4a9a", "#101820"], hemiI: 0.4,
+    dir: [0, 60, 40], fog: 0.55,       // 야간: 네온 말고는 빛이 없다
   },
 };
 const hexRgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -54,7 +59,7 @@ for (const t of Object.values(T3)) t.fog = hexRgb(t.sky[2]);
 
 let renderer, scene, camera, fog, hemi, sun, cockpit, gauge, gaugeCtx, gaugeTex;
 let hands = [];
-let terrain, tPos, tCol, finishMesh;
+let terrain, tPos, tCol, tUv, finishMesh;
 let bgCanvas, bgCtx, bgTex, bgKey = "";
 const inst = {};
 const xs = new Float32Array(N + 2), ys = new Float32Array(N + 2), zs = new Float32Array(N + 2);
@@ -409,10 +414,14 @@ function init(canvas) {
   const quads = N * 7;
   tPos = new Float32Array(quads * 6 * 3);
   tCol = new Float32Array(quads * 6 * 3);
+  tUv = new Float32Array(quads * 6 * 2);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(tPos, 3).setUsage(THREE.DynamicDrawUsage));
   geo.setAttribute("color", new THREE.BufferAttribute(tCol, 3).setUsage(THREE.DynamicDrawUsage));
-  terrain = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, depthWrite: false, depthTest: false }));
+  geo.setAttribute("uv", new THREE.BufferAttribute(tUv, 2).setUsage(THREE.DynamicDrawUsage));
+  terrain = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    map: grainTexture(), vertexColors: true, depthWrite: false, depthTest: false,
+  }));
   terrain.frustumCulled = false;
   terrain.renderOrder = -10;
   scene.add(terrain);
@@ -535,13 +544,55 @@ function updateBg(cur, prev, fade) {
 function paletteKey(theme) { return S && S.mode === "arcade" ? "night" : theme; }
 
 let qi = 0;
-function quadAt(xL1, xR1, y1, z1, xL2, xR2, y2, z2, c) {
-  const o = qi * 18;
-  const P = tPos, C = tCol;
+// 노면·지면 질감: 자갈이 박힌 아스팔트 느낌의 회색 잡티. 밝기 1 근처라 정점 색을 흐리지 않고
+// 결만 얹는다 (최종색 = 텍스처 x 정점색). 캔버스로 한 번 만들어 올리면 매 프레임 비용은 0.
+function grainTexture() {
+  const n = 128, c = document.createElement("canvas");
+  c.width = c.height = n;
+  const g = c.getContext("2d");
+  g.fillStyle = "#e0e0e0"; g.fillRect(0, 0, n, n);
+  // 큰 얼룩이 먼저. 1cm짜리 알갱이는 멀어지면 밉맵에 평균으로 묻혀 아무것도 안 보인다
+  // → 실제로 보는 거리(10~60m)에서 읽히도록 0.5~2m 크기의 얼룩을 깐다.
+  for (let i = 0; i < 46; i++) {
+    const v = 202 + Math.floor(Math.random() * 46), r = 7 + Math.random() * 17;
+    const x = Math.random() * n, y = Math.random() * n;
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, `rgba(${v},${v},${v},0.85)`);
+    gr.addColorStop(1, `rgba(${v},${v},${v},0)`);
+    g.fillStyle = gr;
+    for (const [ox, oy] of [[0, 0], [n, 0], [-n, 0], [0, n], [0, -n]]) {   // 이음매가 안 보이게
+      g.save(); g.translate(ox, oy);
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+      g.restore();
+    }
+  }
+  for (let i = 0; i < 6; i++) {               // 진행 방향으로 난 자국 (보수 자국·바퀴 자국)
+    const v = 198 + Math.floor(Math.random() * 30), x = Math.random() * n, w = 2 + Math.random() * 5;
+    g.fillStyle = `rgba(${v},${v},${v},0.5)`;
+    g.fillRect(x, 0, w, n);
+  }
+  for (let i = 0; i < 2200; i++) {            // 잔 알갱이 (가까이서만 보임)
+    const v = 196 + Math.floor(Math.random() * 60);
+    g.fillStyle = `rgb(${v},${v},${v})`;
+    g.fillRect(Math.random() * n, Math.random() * n, 1, 1);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+const UV_SCALE = 7.5;      // m 당 텍스처 1칸. 얼룩 하나가 대략 0.5~2m
+
+function quadAt(xL1, xR1, y1, z1, xL2, xR2, y2, z2, c, uL, uR, v1, v2) {
+  const o = qi * 18, o2 = qi * 12;
+  const P = tPos, C = tCol, U = tUv;
   // 두 삼각형: (L1,R1,R2) (L1,R2,L2)
   P[o] = xL1; P[o + 1] = y1; P[o + 2] = z1;   P[o + 3] = xR1; P[o + 4] = y1; P[o + 5] = z1;   P[o + 6] = xR2; P[o + 7] = y2; P[o + 8] = z2;
   P[o + 9] = xL1; P[o + 10] = y1; P[o + 11] = z1; P[o + 12] = xR2; P[o + 13] = y2; P[o + 14] = z2; P[o + 15] = xL2; P[o + 16] = y2; P[o + 17] = z2;
   for (let k = 0; k < 6; k++) { C[o + k * 3] = c[0]; C[o + k * 3 + 1] = c[1]; C[o + k * 3 + 2] = c[2]; }
+  // UV는 카메라가 아니라 도로 기준(가로 = 중심에서의 거리, 세로 = 실제 주행거리)이라
+  // 달려도 무늬가 화면에 붙어 따라오지 않는다
+  U[o2] = uL; U[o2 + 1] = v1;   U[o2 + 2] = uR; U[o2 + 3] = v1;   U[o2 + 4] = uR; U[o2 + 5] = v2;
+  U[o2 + 6] = uL; U[o2 + 7] = v1;  U[o2 + 8] = uR; U[o2 + 9] = v2;  U[o2 + 10] = uL; U[o2 + 11] = v2;
   qi++;
 }
 function emptyQuad() { tPos.fill(0, qi * 18, qi * 18 + 18); qi++; }
@@ -570,9 +621,10 @@ function adaptQuality(dt, now) {
   }
 }
 
+let fogMul = 1;
 function setFog() {
   fog.near = FOG_NEAR;
-  fog.far = Math.max(120, drawN * SEG * FOG_SPAN);
+  fog.far = Math.max(120, drawN * SEG * FOG_SPAN * fogMul);
   if (window.R3D) window.R3D.drawDist = drawN * SEG;
 }
 
@@ -594,6 +646,11 @@ function render(dt, now) {
   // 최신 Three.js는 빛을 물리 단위로 계산(÷π) → 예전 세기의 약 π배
   hemi.color.set(tc.hemi[0]); hemi.groundColor.set(tc.hemi[1]); hemi.intensity = tc.hemiI * 2.4;
   sun.color.set(tc.sun); sun.intensity = tc.sunI * 1.6;
+  // 해 방향도 테마마다 다르다 — 방향이 하나면 노을 팔레트여도 정오처럼 보인다
+  const d0 = tp.dir || tc.dir, d1 = tc.dir;
+  sun.position.set(lerp(d0[0], d1[0], themeFade), lerp(d0[1], d1[1], themeFade), lerp(d0[2], d1[2], themeFade));
+  fogMul = lerp(tp.fog ?? 1, tc.fog ?? 1, themeFade);
+  setFog();
   baseIdx = Math.floor(camZ / SEG);
   bgOffset += curveAt(baseIdx) * disp.speed * dt * 900;
   bgTex.offset.x = mod(bgOffset / (W * 2), 1);
@@ -625,7 +682,9 @@ function render(dt, now) {
     const t = T3[paletteKey(themeAt(idx * SEG))];
     const st = mod(Math.floor(idx / 3), 2);
     const x1 = xs[n], y1 = ys[n], z1 = Math.min(zs[n], 0.5), x2 = xs[n + 1], y2 = ys[n + 1], z2 = zs[n + 1];
-    const Q = (l, r, c) => quadAt(x1 + l, x1 + r, y1, z1, x2 + l, x2 + r, y2, z2, c);
+    const va = (idx * SEG) / UV_SCALE, vb = va + SEG / UV_SCALE;
+    const Q = (l, r, c) => quadAt(x1 + l, x1 + r, y1, z1, x2 + l, x2 + r, y2, z2, c,
+                                  l / UV_SCALE, r / UV_SCALE, va, vb);
     Q(-400, 400, c01(t.ground[st]));
     Q(-RW * 1.32, RW * 1.32, c01(t.verge[st]));
     Q(-RW, RW, c01(t.road[st]));
@@ -637,8 +696,10 @@ function render(dt, now) {
   terrain.geometry.setDrawRange(0, qi * 6);           // 줄어든 세그먼트는 아예 안 보냄
   terrain.geometry.attributes.position.updateRanges = [{ start: 0, count: qi * 6 * 3 }];
   terrain.geometry.attributes.color.updateRanges = [{ start: 0, count: qi * 6 * 3 }];
+  terrain.geometry.attributes.uv.updateRanges = [{ start: 0, count: qi * 6 * 2 }];
   terrain.geometry.attributes.position.needsUpdate = true;
   terrain.geometry.attributes.color.needsUpdate = true;
+  terrain.geometry.attributes.uv.needsUpdate = true;
 
   // 결승선
   const fin = track && track.finish;
