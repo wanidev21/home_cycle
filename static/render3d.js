@@ -240,6 +240,14 @@ function makeBuilding([w, h, d]) {
   return g;
 }
 
+// 바닥 타원 그림자: 오브젝트가 땅에 붙어 보이게. 종류마다 밑동 크기가 다르다 (미터)
+const SHADOW_R = {
+  tree: 1.5, treeCity: 1.3, pine: 1.4, rock: 1.1, house: 4.2, lamp: 0.45, palm: 1.2,
+  parasol: 1.3, sign: 0.5, busstop: 2.1, light: 0.4, fence: 1.5, mailbox: 0.35,
+  flowers: 1.2, rail: 1.7, warn: 0.4, falls: 0.9, surf: 0.45,
+  bld0: 5.5, bld1: 7.5, bld2: 4.5,
+};
+
 function addInstanced(name, geo, mat, cap) {
   const m = new THREE.InstancedMesh(geo, mat, cap);
   m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -430,6 +438,21 @@ function init(canvas) {
   const bmat = new THREE.MeshLambertMaterial({ map: windowTexture(), flatShading: true });
   BUILD_VARIANTS.forEach((v, i) => addInstanced("bld" + i, makeBuilding(v), bmat, 40));
 
+  // 그림자는 지형(renderOrder -10) 위, 오브젝트(0) 아래에 깔린다
+  const shadowMat = new THREE.MeshBasicMaterial({
+    color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false, depthTest: false,
+  });
+  const shadowGeo = new THREE.CircleGeometry(1, 10);
+  shadowGeo.rotateX(-Math.PI / 2);
+  shadowGeo.scale(1, 1, 0.42);              // 위에서 비스듬히 보므로 앞뒤로 납작하게
+  const sh = addInstanced("shadow", shadowGeo, shadowMat, 460);
+  sh.renderOrder = -5;
+
+  addInstanced("riderKit", makeRiderKit(), lambert(), 8);
+  addInstanced("riderBody", makeRiderBody(), lambert(), 8);
+  addInstanced("riderThigh", makeThigh(), lambert(), 16);
+  addInstanced("riderCalf", makeCalf(), lambert(), 16);
+
   cockpit = buildCockpit();
   camera.add(cockpit);
   resize();
@@ -612,7 +635,10 @@ function render(dt, now) {
     }
   }
 
+  resetInstances();
   placeScenery();
+  placeRiders(fp);
+  finalizeInstances();
 
   // 콕핏
   cockpit.visible = fp;
@@ -625,20 +651,187 @@ function render(dt, now) {
   drawOverlay(dt, now, fp, cam, fx);
 }
 
+// --- 인스턴스 배치 (풍경과 라이더가 같은 카운터를 쓴다) ---
+const cnt = {};
+function resetInstances() { for (const k in inst) cnt[k] = 0; }
+function finalizeInstances() {
+  for (const k in inst) {
+    const m = inst[k];
+    m.count = cnt[k];
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  }
+}
+// 같은 종류라도 개체마다 밝기·색조를 조금씩 흔든다 (공짜인데 "복붙" 느낌이 사라진다).
+// 색을 안 주면 instanceColor가 0(검정)으로 남는 인스턴스가 생기므로 항상 채운다.
+function jitter(seed, color) {
+  const a = hash(seed * 7.3), b = hash2(seed * 3.1);
+  const l = 0.95 + a * 0.1;                        // 밝기 ±5%
+  if (color) col.set(color); else col.setRGB(1, 1, 1);
+  col.r *= l * (1 + (b - 0.5) * 0.06);             // 색조도 살짝 (따뜻/차갑게)
+  col.g *= l;
+  col.b *= l * (1 - (b - 0.5) * 0.06);
+  return col;
+}
+function putShadow(px, py, pz, r) {
+  const m = inst.shadow;
+  if (cnt.shadow >= m.instanceMatrix.count) return;
+  q.setFromAxisAngle(up, 0);
+  sc3.set(r * 1.2, 1, r * 1.2);
+  m4.compose(v3.set(px + r * 0.15, py + 0.02, pz), q, sc3);   // 광원 반대쪽으로 살짝
+  m.setMatrixAt(cnt.shadow, m4);
+  cnt.shadow++;
+}
+function put(name, px, py, pz, s, rotY, color) {
+  const m = inst[name];
+  if (cnt[name] >= m.instanceMatrix.count) return;
+  q.setFromAxisAngle(up, rotY);
+  sc3.set(s, s, s);
+  m4.compose(v3.set(px, py, pz), q, sc3);
+  m.setMatrixAt(cnt[name], m4);
+  m.setColorAt(cnt[name], jitter(px * 13.7 + pz * 0.31, color));
+  cnt[name]++;
+  const r = SHADOW_R[name];
+  if (r) putShadow(px, py, pz, r * s);
+}
+
+// ---------------------------------------------------------------------
+// 3D 라이더 (라이벌 + 후방 시점의 나). 2D 그림을 얹던 걸 실제 입체로 바꾼다.
+// 메시 4개로 나눈 이유:
+//   body  = 저지·헬멧. 흰 정점 → instanceColor로 선수 색을 입힌다.
+//   kit   = 자전거·반바지·신발. 색이 고정이라 tint하면 안 된다 (파란 저지에 파란 다리가 된다).
+//   thigh/calf = 크랭크 각도로 매 프레임 각도가 바뀌므로 따로.
+// 그리기는 4번뿐이라 선수가 6명이든 1명이든 비용이 같다.
+// ---------------------------------------------------------------------
+const RD = {
+  wheelR: 0.335, hipY: 0.95, hipZ: 0.07, hipX: 0.105, shoulder: 0.40,
+  crankY: 0.32, crankZ: -0.03, pedalR: 0.17, thigh: 0.42, calf: 0.44,
+};
+// 성격별 실루엣 (키는 같게, 폭만 바꾼다 — 키가 달라지면 거리 판단이 흐려진다)
+const RIDER_SHAPE = {
+  climber:  { sh: 0.90, hip: 0.88, leg: 0.85, lean: 0.05 },
+  sprinter: { sh: 1.10, hip: 1.05, leg: 1.15, lean: -0.02 },
+  steady:   { sh: 1.00, hip: 1.00, leg: 1.00, lean: 0.00 },
+  starter:  { sh: 0.95, hip: 0.95, leg: 0.95, lean: 0.09 },
+  attacker: { sh: 1.04, hip: 1.00, leg: 1.08, lean: 0.07 },
+  me:       { sh: 1.00, hip: 1.00, leg: 1.00, lean: 0.02 },
+};
+const LEAN_BASE = 0.52;          // 라디안. 도로 자전거의 기본 상체 각도
+
+function makeRiderBody() {       // 원점 = 엉덩이. instanceColor가 저지색을 입힌다
+  const h = 0.40;
+  // 허리에서 어깨로 벌어지는 사다리꼴. 4면 원기둥을 45° 돌리면 각진 통이 된다.
+  const torso = new THREE.CylinderGeometry(0.155, 0.10, h, 4);
+  torso.rotateY(Math.PI / 4);
+  const shoulder = new THREE.CylinderGeometry(0.155, 0.145, 0.11, 4);
+  shoulder.rotateY(Math.PI / 4);
+  return merge([
+    part(torso, "#ffffff", 0, h / 2, 0, 0, 0, 1.45, 1, 1.05),
+    part(shoulder, "#ffffff", 0, h + 0.03, -0.01, 0, 0, 1.5, 1, 1.1),   // 어깨가 제일 넓다
+    // 헬멧: 뒤에서 보면 앞뒤로 긴 물방울
+    part(new THREE.SphereGeometry(0.1, 7, 6), "#ffffff", 0, h + 0.17, -0.02, 0, 0, 1.05, 0.92, 1.45),
+  ]);
+}
+function makeRiderKit() {        // 원점 = 땅. 색 고정 (tint 안 함)
+  const R = RD, ps = [];
+  for (const wz of [0.52, -0.55]) {                                                 // 바퀴
+    const g = new THREE.TorusGeometry(R.wheelR, 0.05, 4, 14);
+    g.rotateY(Math.PI / 2);
+    ps.push(part(g, "#1b1b1f", 0, R.wheelR, wz));
+  }
+  ps.push(part(new THREE.BoxGeometry(0.06, 0.06, 1.0), "#2b2f37", 0, R.wheelR + 0.28, 0));          // 탑튜브
+  ps.push(part(new THREE.BoxGeometry(0.06, 0.62, 0.06), "#2b2f37", 0, R.wheelR + 0.02, 0.4, 0.45));  // 시트튜브
+  ps.push(part(new THREE.BoxGeometry(0.06, 0.66, 0.06), "#2b2f37", 0, R.wheelR + 0.06, -0.5, -0.3)); // 헤드튜브
+  // 뒤에서 보이는 삼각형: 시트스테이·체인스테이가 뒷바퀴 양옆으로 벌어진다 → "자전거"로 읽힌다
+  for (const sx of [-1, 1]) {
+    ps.push(part(new THREE.BoxGeometry(0.035, 0.58, 0.035), "#2b2f37", sx * 0.055, R.wheelR + 0.16, 0.3, 0.62, sx * 0.12));
+    ps.push(part(new THREE.BoxGeometry(0.035, 0.5, 0.035), "#2b2f37", sx * 0.05, R.wheelR - 0.14, 0.28, 1.25, sx * 0.1));
+  }
+  ps.push(part(new THREE.CylinderGeometry(0.035, 0.035, 0.14, 6), "#4a5058", 0, R.wheelR, 0.52, 0, Math.PI / 2));  // 뒤 허브
+  ps.push(part(new THREE.BoxGeometry(0.44, 0.05, 0.06), "#17191d", 0, R.hipY - 0.06, -0.58));       // 핸들바
+  ps.push(part(new THREE.BoxGeometry(0.13, 0.05, 0.26), "#15171b", 0, R.hipY - 0.1, R.hipZ + 0.06)); // 안장
+  ps.push(part(new THREE.BoxGeometry(0.30, 0.16, 0.30), "#23263a", 0, R.hipY - 0.04, R.hipZ));       // 반바지
+  return merge(ps);
+}
+const makeThigh = () => merge([part(new THREE.CylinderGeometry(0.075, 0.062, RD.thigh, 5), "#d9a77f", 0, -RD.thigh / 2, 0)]);
+const makeCalf = () => merge([
+  part(new THREE.CylinderGeometry(0.058, 0.042, RD.calf, 5), "#d9a77f", 0, -RD.calf / 2, 0),
+  part(new THREE.BoxGeometry(0.09, 0.05, 0.19), "#f2f2f2", 0, -RD.calf - 0.02, -0.03),   // 신발
+]);
+
+const down = new THREE.Vector3(0, -1, 0);
+const xAxis = new THREE.Vector3(1, 0, 0);
+// 엉덩이~페달 2관절 풀이. 전부 YZ 평면(옆에서 본 면)이라 2D 삼각법으로 충분하다.
+function kneeAt(hy, hz, py, pz) {
+  const dy = py - hy, dz = pz - hz;
+  const L1 = RD.thigh, L2 = RD.calf;
+  const d = Math.min(Math.max(Math.hypot(dy, dz), Math.abs(L1 - L2) + 0.02), L1 + L2 - 0.02);
+  const base = Math.atan2(dz, dy);
+  const a1 = Math.acos(Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d)));
+  const ang = base - a1;                       // 무릎은 앞(-z)으로 꺾인다
+  return [hy + Math.cos(ang) * L1, hz + Math.sin(ang) * L1];
+}
+function putLimb(name, px, py, pz, ty, tz, thick) {
+  const m = inst[name];
+  if (cnt[name] >= m.instanceMatrix.count) return;
+  v3.set(0, ty - py, tz - pz).normalize();
+  q.setFromUnitVectors(down, v3);
+  sc3.set(thick, 1, thick);
+  m4.compose(v3.set(px, py, pz), q, sc3);
+  m.setMatrixAt(cnt[name], m4);
+  cnt[name]++;
+}
+
+function placeRiders(fp) {
+  const riders = [];
+  for (const r of (S && S.riders) || []) {
+    if (r.kind === "ai") riders.push({ d: r.distance_m, lane: r.lane || 0, color: r.color, a: riderAngles[r.id] || 0, shape: r.persona_id });
+  }
+  if (!fp) riders.push({ d: pos0, lane: 0, color: ME.jersey, a: disp.angle, shape: "me" });
+  for (const r of riders) {
+    if (r.d - camZ < 2.0) continue;            // 카메라에 붙으면 화면을 다 덮는다
+    const w = worldAt(r.d, r.lane);
+    if (!w) continue;
+    const [px, py, pz] = w;
+    const sp = RIDER_SHAPE[r.shape] || RIDER_SHAPE.steady;
+
+    putShadow(px, py, pz, 0.62);
+    // 자전거 + 반바지
+    let m = inst.riderKit;
+    if (cnt.riderKit < m.instanceMatrix.count) {
+      q.setFromAxisAngle(up, 0);
+      sc3.set(sp.hip, 1, 1);
+      m4.compose(v3.set(px, py, pz), q, sc3);
+      m.setMatrixAt(cnt.riderKit, m4);
+      cnt.riderKit++;
+    }
+    // 상체 (엉덩이에서 앞으로 숙임)
+    m = inst.riderBody;
+    if (cnt.riderBody < m.instanceMatrix.count) {
+      q.setFromAxisAngle(xAxis, -(LEAN_BASE + sp.lean * 3));   // -x 회전 = 머리가 진행 방향(-z)으로
+      sc3.set(sp.sh, 1, 1);
+      m4.compose(v3.set(px, py + RD.hipY, pz + RD.hipZ), q, sc3);
+      m.setMatrixAt(cnt.riderBody, m4);
+      col.set(r.color);
+      m.setColorAt(cnt.riderBody, col);
+      cnt.riderBody++;
+    }
+    // 다리: 크랭크 각도로 매 프레임 계산 (내 RPM과 박자가 맞아야 한다)
+    for (const side of [-1, 1]) {
+      const ang = r.a + (side < 0 ? 0 : Math.PI);
+      const hy = py + RD.hipY - 0.06, hz = pz + RD.hipZ;
+      const ppy = py + RD.crankY + Math.cos(ang) * RD.pedalR;
+      const ppz = pz + RD.crankZ + Math.sin(ang) * RD.pedalR;
+      const [ky, kz] = kneeAt(hy, hz, ppy, ppz);
+      const hx = px + side * RD.hipX * sp.hip;
+      putLimb("riderThigh", hx, hy, hz, ky, kz, sp.leg);
+      putLimb("riderCalf", hx, ky, kz, ppy, ppz, sp.leg);
+    }
+  }
+}
+
 // 길가 오브젝트 배치 (2D drawSprites와 같은 규칙: 세그먼트 번호 해시로 결정 → 매번 같은 자리)
 function placeScenery() {
-  const cnt = {};
-  for (const k in inst) cnt[k] = 0;
-  const put = (name, px, py, pz, s, rotY, color) => {
-    const m = inst[name];
-    if (cnt[name] >= m.instanceMatrix.count) return;
-    q.setFromAxisAngle(up, rotY);
-    sc3.set(s, s, s);
-    m4.compose(v3.set(px, py, pz), q, sc3);
-    m.setMatrixAt(cnt[name], m4);
-    if (color) { col.set(color); m.setColorAt(cnt[name], col); }
-    cnt[name]++;
-  };
   for (let n = 1; n < drawN; n++) {
     const idx = baseIdx + n;
     const theme = themeAt(idx * SEG);
@@ -674,12 +867,6 @@ function placeScenery() {
       else if (h < 0.21) put("surf", px(3 + v * 3), py, pz, 1, rot, v > 0.5 ? "#ffd166" : "#f8f9fa");
     }
   }
-  for (const k in inst) {
-    const m = inst[k];
-    m.count = cnt[k];
-    m.instanceMatrix.needsUpdate = true;
-    if (m.instanceColor) m.instanceColor.needsUpdate = true;
-  }
 }
 
 // ---------------------------------------------------------------------
@@ -700,6 +887,52 @@ function project(p) {
   return { x: (v3.x + 1) / 2 * W, y: (1 - v3.y) / 2 * H, m: (H / 2) / (halfTan * depth), depth };
 }
 
+// 3D 몸 위에 겹치는 2D 요소: 이름표, 어택 오라, 터보 불꽃 등
+function drawRiderFx(p, o) {
+  const m = p.m;
+  if (o.flame) {
+    const fl = 0.3 + Math.random() * 0.25;
+    ctx.fillStyle = "rgba(255,140,0,0.85)";
+    ctx.beginPath(); ctx.moveTo(p.x - 0.14 * m, p.y - 0.12 * m); ctx.lineTo(p.x + 0.14 * m, p.y - 0.12 * m); ctx.lineTo(p.x, p.y + fl * m); ctx.fill();
+  }
+  if (o.aura) {
+    const t = performance.now(), cy = p.y - 0.5 * m, pulse = 0.6 + 0.25 * Math.sin(t / 110);
+    const g = ctx.createRadialGradient(p.x, cy, 0.08 * m, p.x, cy, 1.15 * m);
+    g.addColorStop(0, `rgba(255,176,96,${0.4 * pulse})`);
+    g.addColorStop(1, "rgba(255,140,60,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(p.x, cy, 1.15 * m, 1.0 * m, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(255,192,128,${0.55 * pulse})`;
+    ctx.lineWidth = Math.max(1, 0.03 * m);
+    for (let i = 0; i < 4; i++) {
+      const ly = p.y - (0.22 + i * 0.24) * m, len = (0.35 + ((t / 260 + i * 0.27) % 1) * 0.55) * m;
+      ctx.beginPath(); ctx.moveTo(p.x + 0.5 * m, ly); ctx.lineTo(p.x + 0.5 * m + len, ly); ctx.stroke();
+    }
+  }
+  if (o.bubble) {
+    ctx.fillStyle = "rgba(120,220,255,0.18)"; ctx.strokeStyle = "rgba(160,235,255,0.8)"; ctx.lineWidth = 0.03 * m;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y - 0.75 * m, 0.62 * m, 0.95 * m, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  if (o.dizzy) {
+    ctx.font = `${Math.round(0.25 * m)}px system-ui`; ctx.textAlign = "center";
+    ctx.fillText("💫", p.x + Math.sin(performance.now() / 120) * 0.15 * m, p.y - 1.6 * m);
+  }
+}
+function drawRiderTag(p, r) {
+  const o = riderOpts(r);
+  drawRiderFx(p, { flame: o.flame, aura: o.aura, dizzy: o.dizzy });
+  if (p.m > 18 && o.label) {
+    const fs = clamp(0.2 * p.m, 11, 20);
+    ctx.globalAlpha = o.fade ? 0.65 : 1;
+    ctx.font = `800 ${fs}px system-ui`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.6)";
+    ctx.strokeText(o.label, p.x, p.y - 1.75 * p.m);
+    ctx.fillStyle = o.labelColor || r.color;
+    ctx.fillText(o.label, p.x, p.y - 1.75 * p.m);
+    ctx.globalAlpha = 1;
+  }
+}
+
 function drawOverlay(dt, now, fp, cam, fx) {
   ctx.clearRect(0, 0, W, H);
   camera.updateMatrixWorld();
@@ -714,19 +947,18 @@ function drawOverlay(dt, now, fp, cam, fx) {
       else if (o.t === "banana") add(o.d, o.lane || 0, (p) => drawBanana(p.x, p.y, p.m));
     }
   }
+  // 몸은 3D 메시가 그린다 (placeRiders). 여기서는 이름표와 이펙트만 겹친다.
   for (const r of (S && S.riders) || []) {
-    if (r.kind === "ai") add(r.distance_m, r.lane, (p) => { if (p.m > 1) drawRider(p.x, p.y, p.m, riderAngles[r.id] || 0, riderOpts(r)); });
+    if (r.kind === "ai") add(r.distance_m, r.lane, (p) => { if (p.m > 1) drawRiderTag(p, r); });
     else if (r.kind === "ghost" && r.distance_m > pos0 + 1.5) add(r.distance_m, -0.4, (p) => drawRider(p.x, p.y, p.m, disp.angle * 0.97 + 1, GHOST));
   }
   if (track && track.finish) {
     add(track.finish, 0, (p) => drawFinishArch(p.x, p.y, p.m, p.m * RW));
   }
-  if (!fp) {
-    const climbing = factorAt(pos0) < 0.8 && disp.rpm > 0;
-    add(pos0, 0, (p) => drawRider(p.x, p.y, p.m, disp.angle, {
-      ...ME, standing: climbing,
-      flame: !!(fx.turbo || fx.pad || fx.star), rainbow: !!fx.star, bubble: !!fx.shield,
-      tilt: fx.slip ? Math.sin(now / 60) * 0.25 : 0, dizzy: !!fx.slip,
+  if (!fp) {   // 내 몸도 3D. 아이템 이펙트만 겹쳐 그린다
+    add(pos0, 0, (p) => drawRiderFx(p, {
+      flame: !!(fx.turbo || fx.pad || fx.star), rainbow: !!fx.star,
+      bubble: !!fx.shield, dizzy: !!fx.slip,
     }));
   }
   list.sort((a, b) => b.p.depth - a.p.depth);
