@@ -1,0 +1,19 @@
+{
+  "name": "야경 도심",
+  "layers": {
+    "sky": "maps/city-night/sky.png",
+    "far": "maps/city-night/far.png",
+    "mid": "maps/city-night/mid.png",
+    "near": "maps/city-night/near.png",
+    "road": "maps/city-night/road.png"
+  },
+  "scrollSpeed": { "sky": 0.02, "far": 0.12, "mid": 0.45, "near": 0.85, "road": 1.0 },
+  "placeholder": {
+    "sky": ["#0b1020", "#1b2547", "#3b3560"],
+    "far": "#171c33",
+    "mid": "#2a2350",
+    "near": "#3d3358",
+    "road": "#23232c",
+    "lane": "#ffd36b"
+  }
+}

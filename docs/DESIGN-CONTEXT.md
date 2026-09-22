@@ -46,13 +46,17 @@ PC가 서버, **태블릿 브라우저가 화면**(Lenovo TB-X606F, 1920x1200, P
 |------|------|
 | `templates/game.html` | 화면 전체 (CSS + DOM + 2D Canvas 렌더러 + WebSocket + 사운드) |
 | `static/render3d.js` | **3D 렌더러 (기본, Three.js)**. 2D와 같은 트랙 데이터를 읽는다 |
+| `static/parallax.js` | 2.5D 패럴랙스 렌더러. 그림 레이어를 속도별로 흘린다 |
 | `static/cockpit.js` | 1인칭 콕핏 (2D 오버레이). 팔·핸들바는 PNG, 속도계는 코드 |
 | `static/rider3p.js` | 3인칭 뒷모습 라이더. 스프라이트 시트를 속도에 비례해 재생 |
 | `pedalquest/*.py` | 서버 (게임 로직·센서·기록). 화면이 받는 데이터의 출처 |
 | `art/chr/anime/`, `art/chr/photo/` | 캐릭터 원화 두 벌 (1792x1008). 브라우저에 내려보내지 않는다 |
 | `static/chr/*.jpg` | 원화에서 잘라 만든 화면용 이미지. `tools/chr_art.py`가 만든다 |
 
-그래픽 모드는 `G`키 또는 메뉴 칩으로 3D ↔ 2D 전환 (**기본 3D**, `localStorage["pq.gfx"]`).
+그래픽 모드는 `G`키 또는 메뉴 칩으로 **3D → 2.5D → 2D** 순환 (**기본 3D**, `localStorage["pq.gfx"]`).
+2.5D는 그림 레이어 5장(sky/far/mid/near/road)을 속도별로 흘리는 패럴랙스 — 캐릭터 스프라이트와
+화풍이 맞는 쪽이다. 맵은 `static/maps/<id>/map.json`, 고르는 줄은 메뉴의 `#mapRow`
+(2.5D일 때만 보인다). 그림이 없는 레이어는 코드로 그린 대체 그림이 들어간다.
 시점은 `V`키로 1인칭 ↔ 후방 (기본 1인칭, `localStorage["pq.cam"]`).
 
 **2D는 없어지지 않는다.** 3D가 라이벌·고스트·코인·아이템·결승 아치를 2D 그림 함수로

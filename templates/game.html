@@ -78,6 +78,15 @@ canvas#game, canvas#game3d { position: fixed; inset: 0; width: 100%; height: 100
 .strip { display: grid; grid-template-columns: repeat(4, 1fr); border-radius: var(--r-lg); margin-bottom: 20px; overflow: hidden; }
 .strip > div { padding: 18px 22px; border-left: 1px solid var(--line); }
 .strip > div:first-child { border-left: 0; }
+/* 2.5D 맵 고르기. 그래픽 모드가 2.5D일 때만 보인다. */
+.maprow { display: flex; align-items: center; gap: 12px; margin: -6px 0 18px; flex-wrap: wrap; }
+.maprow > b { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0.08em; }
+#mapList { display: flex; gap: 8px; flex-wrap: wrap; }
+#mapList button {
+  height: 40px; padding: 0 18px; border-radius: 999px; font-size: 15px;
+  background: var(--glass); border: 1px solid var(--line); color: var(--muted);
+}
+#mapList button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); font-weight: 700; }
 .strip small { display: block; color: var(--muted); font-size: 13px; letter-spacing: 0.04em; margin-bottom: 6px; }
 .strip b { font-size: 34px; font-weight: 700; line-height: 1; }
 .strip i { font-style: normal; color: var(--muted); font-size: 15px; margin-left: 4px; }
@@ -455,6 +464,7 @@ html.fx-on .overlay { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(
       <div><small>누적 거리</small><b class="num" id="stTotal">0</b><i>km</i></div>
       <div><small>누적 라이딩</small><b class="num" id="stSessions">0</b><i>회</i></div>
     </div>
+    <div id="mapRow" class="maprow hidden"><b>맵</b><div id="mapList"></div></div>
     <div class="modes">
       <button class="mode primary" id="btnFree" style="--art:url(/static/chr/mode-free.jpg)">
         <span class="icon"><svg><use href="#i-bike"/></svg></span><span class="go"><svg><use href="#i-arrow"/></svg></span>
@@ -957,7 +967,7 @@ window.addEventListener("keydown", (e) => {
   if (MOCK && e.key === "ArrowUp") { e.preventDefault(); setMock(mockTarget + 10); }
   else if (MOCK && e.key === "ArrowDown") { e.preventDefault(); setMock(mockTarget - 10); }
   else if (e.key === "v" || e.key === "V") setCam(camMode === "fp" ? "tp" : "fp");
-  else if (e.key === "g" || e.key === "G") setGfx(!(window.R3D && R3D.on));
+  else if (e.key === "g" || e.key === "G") setGfx(GFX_CYCLE[(GFX_CYCLE.indexOf(gfxMode) + 1) % GFX_CYCLE.length]);
   else if ((e.key === "Enter" || e.key === "i") && S && S.arcade) { e.preventDefault(); send({ command: "use_item" }); }
   else if (e.key === " ") {
     e.preventDefault();
@@ -1854,10 +1864,21 @@ function setCam(m) {
   try { localStorage.setItem("pq.cam", m); } catch (e) { /* 무시 */ }
   $("camLabel").textContent = m === "fp" ? "1인칭" : "뒤에서";
 }
-// 그래픽 모드: 2D(기본) / 3D(베타, Three.js). 3D는 처음 켤 때 모듈을 불러온다
-async function setGfx(on) {
-  try { localStorage.setItem("pq.gfx", on ? "3d" : "2d"); } catch (e) { /* 무시 */ }
-  if (on && !window.R3D) {
+// 그래픽 모드 세 가지. 칩을 누르거나 G키로 돌아가며 바뀐다.
+//   3d   Three.js 저폴리 월드 (기본)
+//   2.5d 그림 레이어를 속도별로 흘리는 패럴랙스 (캐릭터 스프라이트와 화풍이 맞는다)
+//   2d   도형으로 그린 의사 3D — 위 둘을 못 쓸 때의 대비책
+// 3D와 2.5D는 처음 켤 때 모듈을 불러온다.
+const GFX_LABEL = { "3d": "그래픽 3D", "2.5d": "그래픽 2.5D", "2d": "그래픽 2D" };
+const GFX_CYCLE = ["3d", "2.5d", "2d"];
+let gfxMode = "2d";
+
+async function setGfx(mode) {
+  if (mode === true) mode = "3d";            // 예전 불리언 호출도 받아준다
+  else if (mode === false) mode = "2d";
+  if (!GFX_LABEL[mode]) mode = "2d";
+
+  if (mode === "3d" && !window.R3D) {
     try {
       $("gfxLabel").textContent = "3D 불러오는 중…";
       await import("/static/render3d.js");
@@ -1865,16 +1886,65 @@ async function setGfx(on) {
     } catch (e) {
       console.error(e);
       toast("3D를 켤 수 없어요 — 2D로 계속합니다");
-      on = false;
+      mode = "2d";
       window.R3D = null;
     }
   }
-  if (window.R3D) R3D.on = on;
-  $("game3d").classList.toggle("hidden", !on);
-  if (on) R3D.resize();
-  $("gfxLabel").textContent = on ? "그래픽 3D" : "그래픽 2D";
+  if (mode === "2.5d" && !window.PX25) {
+    try {
+      $("gfxLabel").textContent = "2.5D 불러오는 중…";
+      await import("/static/parallax.js");
+      await PX25.loadIndex();
+      await PX25.loadMap(savedMapId());
+    } catch (e) {
+      console.error(e);
+      toast("2.5D를 켤 수 없어요 — 2D로 계속합니다");
+      mode = "2d";
+      window.PX25 = null;
+    }
+  }
+
+  gfxMode = mode;
+  try { localStorage.setItem("pq.gfx", mode); } catch (e) { /* 무시 */ }
+  if (window.R3D) R3D.on = mode === "3d";
+  if (window.PX25) PX25.on = mode === "2.5d";
+  // 3D만 제 캔버스를 쓴다. 2.5D는 2D와 같은 #game에 그린다.
+  $("game3d").classList.toggle("hidden", mode !== "3d");
+  if (mode === "3d") R3D.resize();
+  $("gfxLabel").textContent = GFX_LABEL[mode];
+  refreshMapRow();
 }
-$("btnGfx").addEventListener("click", () => setGfx(!(window.R3D && R3D.on)));
+$("btnGfx").addEventListener("click", () => {
+  setGfx(GFX_CYCLE[(GFX_CYCLE.indexOf(gfxMode) + 1) % GFX_CYCLE.length]);
+});
+
+// ---- 2.5D 맵 고르기 ----
+function savedMapId() {
+  let id = null;
+  try { id = localStorage.getItem("pq.map"); } catch (e) { /* 저장소 없음 */ }
+  const list = (window.PX25 && PX25.maps()) || [];
+  if (id && list.some((m) => m.id === id)) return id;
+  return list.length ? list[0].id : "coastal";
+}
+function refreshMapRow() {
+  const row = $("mapRow");
+  const show = gfxMode === "2.5d" && window.PX25 && PX25.maps().length > 1;
+  row.classList.toggle("hidden", !show);
+  if (!show) return;
+  const cur = PX25.current();
+  $("mapList").innerHTML = "";
+  for (const m of PX25.maps()) {
+    const b = document.createElement("button");
+    b.textContent = m.name;
+    b.className = cur && cur.id === m.id ? "on" : "";
+    b.addEventListener("click", async () => {
+      try { localStorage.setItem("pq.map", m.id); } catch (e) { /* 무시 */ }
+      await PX25.loadMap(m.id);
+      refreshMapRow();
+    });
+    $("mapList").appendChild(b);
+  }
+}
 // 3D가 기본이 된 만큼, 달리는 중 WebGL 컨텍스트가 날아가도 검은 화면으로 끝나지 않게.
 // 메모리가 빠듯한 태블릿에서 크롬이 실제로 컨텍스트를 회수한다.
 window.onGfxLost = () => {
@@ -2589,19 +2659,25 @@ function step(now, dt) {
 
   if (videoOn()) { ctx.clearRect(0, 0, W, H); updateVideo(); }
   else if (window.R3D && R3D.on) R3D.render(dt, now);
+  else if (window.PX25 && PX25.on) PX25.render(dt, now);
   else render(dt, now);
   drawMirror();
   // FPS (3D일 때만 표시: 태블릿 성능 확인용)
   fpsFrames++;
   if (now - fpsAt > 1000) {
     // 2D·3D 모두 적응형 품질이 어디로 맞춰졌는지 보여준다 (태블릿 확인용, 디버그라 눈에 덜 띄게)
-    const on3d = !!(window.R3D && R3D.on);
+    const on3d = !!(window.R3D && R3D.on), on25 = !!(window.PX25 && PX25.on);
     $("fpsChip").classList.toggle("hidden", view !== "game");
     const fps = Math.round(fpsFrames * 1000 / (now - fpsAt));
-    const dist = on3d ? R3D.drawDist : drawSeg * SEG;
-    $("fpsChip").textContent = `${on3d ? "3D" : "2D"} · ${fps} fps`
-      + (dist ? ` · ${Math.round(dist)}m` : "")
-      + (!on3d && sceneryDens < 1 ? ` · 밀도 ${Math.round(sceneryDens * 100)}%` : "");
+    // 2.5D는 그리는 거리라는 게 없다 — 대신 어느 맵인지 보여준다
+    const tail = on25
+      ? ((PX25.current() && ` · ${PX25.current().name}`) || "")
+      : (() => {
+          const dist = on3d ? R3D.drawDist : drawSeg * SEG;
+          return (dist ? ` · ${Math.round(dist)}m` : "")
+            + (!on3d && sceneryDens < 1 ? ` · 밀도 ${Math.round(sceneryDens * 100)}%` : "");
+        })();
+    $("fpsChip").textContent = `${GFX_LABEL[gfxMode].replace("그래픽 ", "")} · ${fps} fps` + tail;
     fpsFrames = 0; fpsAt = now;
   }
   updateHud(dt);
@@ -2614,9 +2690,9 @@ resize();
 setCam(camMode);
 // 기본은 3D. 태블릿 실측에서 2D 27fps / 3D 50fps라 3D가 더 부드럽다.
 // 2D는 직접 고른 경우와, 3D를 못 켜는 기기의 대비책으로만 남는다.
-let want3d = true;
-try { want3d = localStorage.getItem("pq.gfx") !== "2d"; } catch (e) { /* 저장소 없음 */ }
-if (want3d) setGfx(true);
+let wantGfx = "3d";
+try { wantGfx = localStorage.getItem("pq.gfx") || "3d"; } catch (e) { /* 저장소 없음 */ }
+setGfx(wantGfx);
 track = buildFreeTrack();
 api("/api/achievements").then((list) => { achMeta = Object.fromEntries(list.map((a) => [a.id, a])); }).catch(() => {});
 connectWS();

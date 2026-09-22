@@ -1,0 +1,19 @@
+{
+  "name": "해안도로",
+  "layers": {
+    "sky": "maps/coastal/sky.png",
+    "far": "maps/coastal/far.png",
+    "mid": "maps/coastal/mid.png",
+    "near": "maps/coastal/near.png",
+    "road": "maps/coastal/road.png"
+  },
+  "scrollSpeed": { "sky": 0.02, "far": 0.1, "mid": 0.4, "near": 0.8, "road": 1.0 },
+  "placeholder": {
+    "sky": ["#2f7fc9", "#8ec9ea", "#dcecf4"],
+    "far": "#5d7f9c",
+    "mid": "#3f7a55",
+    "near": "#9aa3a9",
+    "road": "#4a4e55",
+    "lane": "#f0e6c8"
+  }
+}
