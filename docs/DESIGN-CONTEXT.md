@@ -47,6 +47,8 @@ PC가 서버, **태블릿 브라우저가 화면**(Lenovo TB-X606F, 1920x1200, P
 | `templates/game.html` | 화면 전체 (CSS + DOM + 2D Canvas 렌더러 + WebSocket + 사운드) |
 | `static/render3d.js` | **3D 렌더러 (기본, Three.js)**. 2D와 같은 트랙 데이터를 읽는다 |
 | `pedalquest/*.py` | 서버 (게임 로직·센서·기록). 화면이 받는 데이터의 출처 |
+| `art/chr/anime/`, `art/chr/photo/` | 캐릭터 원화 두 벌 (1792x1008). 브라우저에 내려보내지 않는다 |
+| `static/chr/*.jpg` | 원화에서 잘라 만든 화면용 이미지. `tools/chr_art.py`가 만든다 |
 
 그래픽 모드는 `G`키 또는 메뉴 칩으로 3D ↔ 2D 전환 (**기본 3D**, `localStorage["pq.gfx"]`).
 시점은 `V`키로 1인칭 ↔ 후방 (기본 1인칭, `localStorage["pq.cam"]`).
@@ -93,6 +95,22 @@ RPM 구간 색: `--z1` `#5ab0ff`(낮음) · `--z2` `#3ddc84` · `--z3` `#ffc53d`
 | `#v-records` | 기록 목록 |
 | `#v-achievements` | 업적 (탭 6개) |
 | `#v-result` | 결과 |
+
+**캐릭터 아트.** 메뉴의 모드 버튼 4개와 결과 화면 머리띠에 캐릭터 원화를 깔았다.
+버튼은 `style="--art:url(...)"`로 그림을 지정하고, `.mode::before`가 사진,
+`.mode::after`가 글자를 읽히게 하는 어둠이다. 사진이 카드를 덮으므로 `.mode`에서
+`backdrop-filter`는 뺐다 (뒤의 캔버스를 블러하는 비용인데 보이지도 않는다).
+그림은 카드 비율(약 1.85:1)에 맞춰 잘라둔다 — 세로로 긴 그림을 넣으면 `cover`가
+위아래를 잘라 인물의 머리가 날아간다. 자르는 상자는 `tools/chr_art.py`의 `STYLES`.
+
+원화가 **셀 셰이딩(anime)과 실사풍(photo) 두 벌** 있다. 결과 파일 이름이 같아서
+`tools/chr_art.py --style photo` 한 줄로 갈아끼울 수 있고 화면 코드는 그대로다.
+기본은 anime — 게임 월드가 셀 셰이딩 저폴리라 실사 인물은 혼자 붕 뜬다.
+
+플레이 중 화면에는 아직 캐릭터 그림을 쓰지 않는다. 배경이 그려진 원화라 인물만
+오려낼 수 없어서다 (Pillow만으로 flood fill을 해봤지만 안티에일리어싱 경계를 타고
+검은 레깅스·자전거까지 먹어치운다). 배경이 단색인 그림이 생기면
+`tools/sprite_alpha.py`로 알파를 만들어 쓴다.
 
 ### 플레이 중 HUD (`#hud`, 화면 전체에 고정)
 

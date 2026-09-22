@@ -88,19 +88,28 @@ button:disabled { opacity: 0.35; cursor: default; }
 .mode {
   position: relative; text-align: left; border-radius: var(--r-lg); padding: 22px; min-height: 200px;
   display: flex; flex-direction: column; background: var(--glass); border: 1px solid var(--line);
-  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  overflow: hidden;                        /* 배경 사진이 둥근 모서리를 넘지 않게 */
   transition: transform 0.15s, border-color 0.15s;
 }
+/* 카드 배경 = 캐릭터 원화(--art). 사진이 카드를 덮으므로 backdrop-filter는 뺐다 —
+   뒤의 3D 캔버스를 매 프레임 블러하는 비용인데 보이지도 않는다.
+   ::before가 사진, ::after가 글자를 읽히게 하는 어둠. 내용은 그 위(z-index:1). */
+.mode::before, .mode::after { content: ""; position: absolute; inset: 0; }
+.mode::before { background: var(--art) center / cover no-repeat; opacity: 0.9; }
+.mode::after { background: linear-gradient(180deg, rgba(10,13,18,0.12) 0%, rgba(10,13,18,0.58) 48%, rgba(10,13,18,0.94) 100%); }
+.mode > * { position: relative; z-index: 1; }
 .mode:active { transform: scale(0.98); }
-.mode .icon { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: rgba(255,255,255,0.07); margin-bottom: auto; }
+.mode .icon { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: rgba(10,13,18,0.5); border: 1px solid var(--line); margin-bottom: auto; }
 .mode .icon svg { width: 28px; height: 28px; }
-.mode .t { display: block; margin: 18px 0 4px; font-size: 26px; font-weight: 800; letter-spacing: -0.01em; }
-.mode .d { display: block; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.4; }
-.mode .go { position: absolute; top: 22px; right: 22px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,0.08); }
+.mode .t { display: block; margin: 18px 0 4px; font-size: 26px; font-weight: 800; letter-spacing: -0.01em; text-shadow: 0 2px 12px rgba(0,0,0,0.6); }
+.mode .d { display: block; margin: 0; color: rgba(255,255,255,0.82); font-size: 15px; line-height: 1.4; text-shadow: 0 1px 8px rgba(0,0,0,0.7); }
+.mode .go { position: absolute; top: 22px; right: 22px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(10,13,18,0.5); border: 1px solid var(--line); }
 .mode .go svg { width: 18px; height: 18px; }
-.mode.primary { background: linear-gradient(145deg, #ff7a3d, #e8521a); border-color: transparent; box-shadow: 0 14px 40px rgba(255,106,43,0.28); }
-.mode.primary .icon, .mode.primary .go { background: rgba(255,255,255,0.2); }
-.mode.primary .d { color: rgba(255,255,255,0.85); }
+/* 주황은 프리 라이딩의 표식이라 사진이 깔려도 남긴다 — 어둠 대신 주황으로 덮는다. */
+.mode.primary { border-color: transparent; box-shadow: 0 14px 40px rgba(255,106,43,0.28); }
+.mode.primary::after { background: linear-gradient(180deg, rgba(255,122,61,0.18) 0%, rgba(232,82,26,0.62) 46%, rgba(200,62,12,0.94) 100%); }
+.mode.primary .icon, .mode.primary .go { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.25); }
+.mode.primary .d { color: rgba(255,255,255,0.92); }
 
 .subnav { display: flex; gap: 12px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
 .btn {
@@ -220,6 +229,18 @@ tr:last-child td { border-bottom: 0; }
   animation: rise 0.3s cubic-bezier(.2,.9,.3,1.2);
 }
 @keyframes rise { from { transform: translateY(16px) scale(0.97); opacity: 0; } to { transform: none; opacity: 1; } }
+/* 결과 화면 머리띠. padding만큼 음수 마진을 줘서 대화상자 끝까지 채운다.
+   아래로 갈수록 대화상자 배경색(--glass-strong의 바탕)으로 녹아들어 경계가 안 보인다. */
+.dialog .hero {
+  position: relative; margin: -30px -30px 16px; height: 170px;
+  border-radius: 27px 27px 0 0; overflow: hidden;
+  background: url(/static/chr/result-hero.jpg) center 26% / cover no-repeat;
+}
+.dialog .hero::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(13,17,24,0.05) 0%, rgba(13,17,24,0.45) 55%, rgba(13,17,24,0.98) 100%);
+}
+@media (max-height: 620px) { .dialog .hero { height: 108px; } }
 .dialog h2 { margin: 0 0 6px; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; }
 .dialog .sub { color: var(--muted); margin: 0; font-size: 16px; }
 .dialog .row { display: flex; gap: 12px; justify-content: center; margin-top: 24px; }
@@ -435,19 +456,19 @@ html.fx-on .overlay { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(
       <div><small>누적 라이딩</small><b class="num" id="stSessions">0</b><i>회</i></div>
     </div>
     <div class="modes">
-      <button class="mode primary" id="btnFree">
+      <button class="mode primary" id="btnFree" style="--art:url(/static/chr/mode-free.jpg)">
         <span class="icon"><svg><use href="#i-bike"/></svg></span><span class="go"><svg><use href="#i-arrow"/></svg></span>
         <span class="t">프리 라이딩</span><span class="d">끝없는 길 · 도시 → 교외 → 산길 → 해변</span>
       </button>
-      <button class="mode" id="btnStages">
+      <button class="mode" id="btnStages" style="--art:url(/static/chr/mode-stage.jpg)">
         <span class="icon"><svg><use href="#i-flag"/></svg></span><span class="go"><svg><use href="#i-arrow"/></svg></span>
         <span class="t">스테이지</span><span class="d" id="modeStageMeta">5개 코스 · 별 · 고스트</span>
       </button>
-      <button class="mode" id="btnArcade">
+      <button class="mode" id="btnArcade" style="--art:url(/static/chr/mode-arcade.jpg)">
         <span class="icon"><svg><use href="#i-bolt"/></svg></span><span class="go"><svg><use href="#i-arrow"/></svg></span>
         <span class="t">아케이드 레이스</span><span class="d">라이벌 5명 · 아이템 · 코인</span>
       </button>
-      <button class="mode" id="btnVideo">
+      <button class="mode" id="btnVideo" style="--art:url(/static/chr/mode-video.jpg)">
         <span class="icon"><svg><use href="#i-bike"/></svg></span><span class="go"><svg><use href="#i-arrow"/></svg></span>
         <span class="t">🎥 영상 라이딩</span><span class="d">직접 찍은 길을 내 속도로</span>
       </button>
@@ -576,6 +597,7 @@ html.fx-on .overlay { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(
 <section class="screen" id="v-result">
   <div class="overlay" style="position:static;min-height:100%;background:none;-webkit-backdrop-filter:none;backdrop-filter:none">
     <div class="dialog">
+      <div class="hero"></div>
       <div class="kicker" id="rKicker">RIDE COMPLETE</div>
       <h2 id="rTitle">라이딩 완료</h2>
       <div class="result-stars" id="rStars"></div>
