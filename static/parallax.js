@@ -23,9 +23,13 @@ const LAYERS = ["sky", "far", "mid", "near", "road"];
 const DEFAULT_SPEED = { sky: 0.02, far: 0.1, mid: 0.4, near: 0.8, road: 1.0 };
 
 // 레이어를 화면 어디에 놓나. 지도 JSON의 layout으로 덮어쓸 수 있다.
+//   full       화면 전체를 덮는다       (한 장이 통째로 한 화면인 그림. height 무시)
 //   top        위끝을 화면 맨 위에      height = 화면 높이 대비 그리는 높이
 //   horizon    아래끝을 지평선에        (원경·중경·근경이 지평선 위에 선다)
 //   horizonTop 위끝을 지평선에          (도로가 지평선에서 아래로 깔린다)
+//
+// 레이어를 따로 그린 맵은 horizon 계열을, 1920x1080 한 화면으로 합성해 받은 맵은
+// full을 쓴다. 후자는 지평선이 그림 안에 그려져 있으므로 맵의 horizon 값도 같이 받는다.
 const DEFAULT_LAYOUT = {
   sky: { anchor: "top", height: 0.62 },
   far: { anchor: "horizon", height: 0.30 },
@@ -76,17 +80,44 @@ async function loadMap(id) {
     const r = await fetch(`/static/maps/${id}/map.json`);
     if (r.ok) map = await r.json();
   } catch (e) { /* 아래에서 기본값으로 */ }
-  state.map = map || { name: id, layers: {}, scrollSpeed: {} };
+  state.map = normalize(map || { name: id }, id);
 
   // 그림은 한 장씩 따로 받는다. 한 장이 없다고 지도 전체가 날아가면 안 된다 —
   // 없는 레이어는 코드로 그린 대체 그림으로 채운다 (그림이 도착하기 전에도 달릴 수 있게).
-  const paths = state.map.layers || {};
+  const paths = state.map.layers;
   await Promise.all(LAYERS.map(async (name) => {
     const src = paths[name];
     state.imgs[name] = src ? await loadImage(`/static/${src}`) || placeholder(name) : placeholder(name);
   }));
   state.ready = true;
   return state.map;
+}
+
+// 맵 정의를 한 가지 모양으로 맞춘다.
+// 디자인 쪽에서 받는 meta는 레이어마다 객체를 준다:
+//     "layers": { "sky": { "file": "layer1_sky.jpg", "speed": 0.02, "position": "full" } }
+// 우리가 쓰는 모양은 경로와 속도가 따로다:
+//     "layers": { "sky": "maps/x/sky.png" },  "scrollSpeed": { "sky": 0.02 }
+// 둘 다 받아서 후자로 바꾼다 — 받은 파일을 손으로 옮겨 적지 않아도 되게.
+function normalize(map, id) {
+  const out = { ...map, layers: {}, scrollSpeed: { ...(map.scrollSpeed || {}) }, layout: { ...(map.layout || {}) } };
+  out.name = map.name || map.map || id;
+  for (const name of LAYERS) {
+    const v = (map.layers || {})[name];
+    if (!v) continue;
+    if (typeof v === "string") { out.layers[name] = v; continue; }
+    // 객체 모양: file은 맵 폴더 기준 파일명으로 온다
+    if (v.file) out.layers[name] = `maps/${id}/${v.file}`;
+    if (v.speed !== undefined && out.scrollSpeed[name] === undefined) out.scrollSpeed[name] = v.speed;
+    // position 해석. "bottom"(도로)만 다르다 — 도로 그림은 노면으로 꽉 찬 한 장이라
+    // 화면 전체에 깔면 다른 레이어를 다 덮는다. 지평선 아래 띠로 눌러 넣어야 바닥이 된다.
+    // "mid-upper"·"bottom-strip" 같은 값은 "내용이 그림 안 어디쯤에 있다"는 설명일 뿐,
+    // 그림 자체는 한 화면이므로 full과 같다.
+    if (v.position && !out.layout[name]) {
+      out.layout[name] = { anchor: v.position === "bottom" ? "horizonTop" : "full", height: 1 };
+    }
+  }
+  return out;
 }
 
 function loadImage(url) {
@@ -170,10 +201,19 @@ function placeholder(name) {
 // ------------------------------------------------------------
 function layerBox(name) {
   const lay = (state.map.layout && state.map.layout[name]) || DEFAULT_LAYOUT[name];
+  if (lay.anchor === "full") return { y: 0, h: H };
+  const hz = horizonY();
   const h = H * lay.height;
   if (lay.anchor === "top") return { y: 0, h };
-  if (lay.anchor === "horizonTop") return { y: HORIZON, h: Math.max(h, H - HORIZON) };
-  return { y: HORIZON - h, h };   // "horizon" — 아래끝이 지평선
+  if (lay.anchor === "horizonTop") return { y: hz, h: Math.max(h, H - hz) };
+  return { y: hz - h, h };   // "horizon" — 아래끝이 지평선
+}
+
+// 이 맵의 지평선. 한 화면으로 합성해 받은 맵은 지평선이 그림에 그려져 있으므로
+// 맵이 알려준 값을 쓴다 (안 주면 게임 기본값). 라이벌·코인 투영도 이걸 따라야
+// 그림 속 길과 같은 높이에 선다.
+function horizonY() {
+  return state.map && state.map.horizon ? H * state.map.horizon : HORIZON;
 }
 
 // 한 레이어를 가로로 이어 붙여 화면을 채운다.
@@ -226,7 +266,7 @@ function drawWorld(fp) {
     if (z < minZ) return;
     const sc = F / z;
     if (sc < 1) return;
-    list.push({ z, sc, x: W / 2 + lane * ROAD_W * sc, y: HORIZON + sc * camH, draw });
+    list.push({ z, sc, x: W / 2 + lane * ROAD_W * sc, y: horizonY() + sc * camH, draw });
   };
 
   const arc = S && S.arcade;

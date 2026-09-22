@@ -1,0 +1,12 @@
+{
+  "name": "한강 자전거길",
+  "horizon": 0.72,
+  "pxPerM": 14,
+  "layers": {
+    "sky":  { "file": "layer1_sky.jpg",  "speed": 0.02, "position": "full" },
+    "far":  { "file": "layer2_far.png",  "speed": 0.15, "position": "full" },
+    "mid":  { "file": "layer3_mid.png",  "speed": 0.4,  "position": "full" },
+    "near": { "file": "layer4_near.png", "speed": 0.7,  "position": "full" },
+    "road": { "file": "layer5_road.jpg", "speed": 1.0,  "position": "bottom" }
+  }
+}
