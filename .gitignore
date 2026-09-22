@@ -6,3 +6,8 @@ __pycache__/
 
 # 촬영 영상은 용량이 커서 저장소에 넣지 않는다 (courses.json만 추적)
 static/video/*.mp4
+
+# 3인칭 스프라이트 시트 원본 PNG는 20MB라 넣지 않는다 (촬영 영상과 같은 이유).
+# 브라우저에 나가는 건 tools\sprite_pack.py가 만든 static/cyclist-spritesheet*.webp (3.6MB).
+art/cyclist-spritesheet.png
+art/cyclist-frame-sample.png

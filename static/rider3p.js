@@ -12,13 +12,18 @@
 // 화면에서 내가 사라지면 안 된다.
 // ============================================================
 
-const R3P_SHEET = "/static/cyclist-spritesheet.png";
+// 시트는 알파가 있는 lossy WebP다 (원본 PNG는 20MB, WebP는 3.6MB — art/에 원본이 있고
+// tools/sprite_pack.py가 만든다). 터치 기기는 절반 크기를 받는다: 스프라이트를 약 420px
+// 높이로만 그리므로 절반이면 충분하고, 디코딩이 73MB → 18MB로 줄어 저사양 태블릿이 버틴다.
+// PC는 약 940px 높이로 그려서 원본(칸 684px)도 이미 확대해 쓰는 중이라 줄이면 흐려진다.
+const R3P_SMALL = matchMedia("(pointer: coarse)").matches;
+const R3P_SHEET = `/static/cyclist-spritesheet${R3P_SMALL ? "-half" : ""}.webp`;
 const R3P_META = "/static/cyclist-sprite-meta.json";
 
 // ── 배치 ──
 // 시트 한 칸은 세로로 긴 그림이라 높이로 맞춘다. 가로가 너무 넓어지면(세로로
 // 납작한 화면) 폭으로 한 번 더 조인다.
-const R3P_HEIGHT = 0.58;     // 화면 높이 대비 스프라이트 높이 (앞이 가리지 않을 만큼)
+const R3P_HEIGHT = 0.70;     // 화면 높이 대비 스프라이트 높이 (앞이 가리지 않을 만큼)
 const R3P_MAX_WIDTH = 0.34;  // 화면 폭 대비 상한
 const R3P_BOTTOM = 1.0;      // 스프라이트 아래끝이 놓일 화면 높이 (1 = 화면 맨 아래)
 
@@ -36,7 +41,10 @@ let r3pFrameT = 0, r3pPrevNow = 0;
 (function loadRider3p() {
   const img = new Image();
   img.onload = () => { r3pSheet.img = img; r3pReady(); };
-  img.onerror = () => { r3pSheet.img = null; };
+  img.onerror = () => {
+    console.warn(`[rider3p] 스프라이트 시트를 못 읽었습니다: ${R3P_SHEET} — 도형으로 그린 라이더로 대신합니다`);
+    r3pSheet.img = null;
+  };
   img.src = R3P_SHEET;
 
   fetch(R3P_META)
@@ -56,9 +64,14 @@ function r3pReady() {
   if (cols < 1 || rows < 1 || frames < 1) return;
   const fw = img.naturalWidth / cols, fh = img.naturalHeight / rows;
   if (!fw || !fh) return;
-  if (!r3pSheet.warned && meta.frameWidth && Math.abs(fw - meta.frameWidth) > 1) {
-    console.warn(`[rider3p] 메타(${meta.frameWidth}x${meta.frameHeight})와 실제 칸(${fw.toFixed(1)}x${fh.toFixed(1)})이 다릅니다. 실제 칸을 씁니다.`);
-    r3pSheet.warned = true;
+  // 메타의 frameWidth/Height는 **비율만** 본다. 크기는 달라도 된다 — 태블릿은 절반 크기
+  // 시트를 받으므로 칸도 절반이다. 비율까지 어긋나면 cols/rows가 틀린 것이라 알린다.
+  if (!r3pSheet.warned && meta.frameWidth && meta.frameHeight) {
+    const want = meta.frameWidth / meta.frameHeight;
+    if (Math.abs(fw / fh - want) > 0.02) {
+      console.warn(`[rider3p] 메타 비율(${meta.frameWidth}x${meta.frameHeight})과 실제 칸(${fw.toFixed(1)}x${fh.toFixed(1)})이 다릅니다. cols/rows를 확인하세요.`);
+      r3pSheet.warned = true;
+    }
   }
   Object.assign(r3pSheet, { cols, rows, frames, fw, fh, fps: meta.fps || 12, ok: true });
 }

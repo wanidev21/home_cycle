@@ -753,10 +753,17 @@ WebGL을 못 켜거나 달리는 중 컨텍스트를 잃었을 때 넘어갈 곳
   같은 함수가 화면 맨 위에 겹쳐 그리고, 스프라이트가 준비되면 3D 쪽 내 몸 메시(`placeRiders`의
   `shape:"me"`)를 끈다 — 둘 다 그리면 라이더가 둘로 보인다. 끌지 말지는 양쪽이 **같은**
   `rider3pActive()`를 봐야 한다. 한쪽만 보고 판단하면 둘로 보이거나 아예 사라진다.
-  - 시트(`static/cyclist-spritesheet.png`)와 메타(`…-meta.json`)가 없으면 조용히 false를
-    돌려주고 기존 `drawRider`(도형으로 그린 라이더)로 넘어간다. 그림 하나 없다고 내가 사라지면 안 된다.
-  - 칸 크기는 메타의 frameWidth가 아니라 **이미지를 cols×rows로 나눈 값**을 쓴다. 시트를 줄이거나
-    키우면 메타와 어긋나는데, 실제로 잘라야 하는 건 언제나 나눈 칸이다 (어긋나면 콘솔에 경고).
+  - 시트와 메타(`static/cyclist-sprite-meta.json`)가 없으면 조용히 false를 돌려주고 기존
+    `drawRider`(도형으로 그린 라이더)로 넘어간다. 그림 하나 없다고 내가 사라지면 안 된다.
+  - 칸 크기는 메타의 frameWidth가 아니라 **이미지를 cols×rows로 나눈 값**을 쓴다. 그래서 시트
+    해상도가 바뀌어도 `drawImage` 좌표를 고칠 게 없다 (320x552 → 333x684 교체 때 실제로 그랬다).
+    메타의 frameWidth/Height는 **비율만** 검사한다 — 크기는 달라도 되고(태블릿은 절반 시트),
+    비율이 어긋나면 cols/rows가 틀린 것이라 콘솔에 경고한다.
+  - **시트는 알파가 있는 lossy WebP로 내보낸다.** 원본 PNG는 2664x6840 20MB였다. 와이파이로
+    20MB도 문제지만 디코딩하면 73MB가 메모리에 올라가는 게 더 위험하다 (저사양 태블릿).
+    WebP로 3.6MB. 해상도는 안 줄인다 — PC는 약 940px 높이로 그리는데 칸이 684px라 이미 확대해
+    쓰는 중이다. 대신 **터치 기기는 절반 크기 시트**(`-half.webp`, 디코딩 18MB)를 받는다.
+    원본은 `art/`에, 만드는 건 `tools/sprite_pack.py`.
   - **재생은 크랭크 각도가 아니라 속도에 비례한다.** 시트가 크랭크 한 바퀴가 아니라 영상을
     통째로 잘라온 것이라 프레임 수가 한 바퀴와 맞아떨어지지 않는다 → 각도에 물릴 수가 없다.
     `R3P_REF_SPEED`(24km/h)에서 원본 fps로 돌고, 1km/h 아래면 선다.
@@ -949,14 +956,16 @@ cycle/
 │   └── server.py          # FastAPI + WebSocket
 ├── templates/
 │   └── game.html          # 게임 화면 (Canvas)
-├── art/
-│   └── chr/               # 캐릭터 원화 (1792x1008 JPG). 브라우저에 내려보내지 않는다
+├── art/                   # 원본 소스. 브라우저에 내려보내지 않는다
+│   ├── cyclist-spritesheet.png   # 3인칭 시트 원본 (tools/sprite_pack.py가 WebP로 바꾼다)
+│   └── chr/               # 캐릭터 원화 (1792x1008 JPG)
 │       ├── anime/         # 셀 셰이딩 일러스트 (기본)
 │       └── photo/         # 실사풍 — tools\chr_art.py --style photo 로 전환
 ├── static/
 │   ├── nosleep.min.js
 │   ├── cockpit.js         # 1인칭 콕핏 (2D 오버레이)
 │   ├── rider3p.js         # 3인칭 뒷모습 스프라이트 시트
+│   ├── cyclist-spritesheet[-half].webp  # 시트 (PC / 태블릿용 절반)
 │   ├── parallax.js        # 2.5D 패럴랙스 렌더러
 │   ├── maps/              # 2.5D 맵: index.json + <id>/map.json + 레이어 그림
 │   └── chr/               # 원화에서 잘라낸 화면용 이미지 (tools/chr_art.py가 생성)
