@@ -2,19 +2,22 @@
 
     .venv\\Scripts\\python tools\\sprite_pack.py art\\cyclist-spritesheet.png
 
-받은 원본은 2664x6840 PNG 20MB였다. 두 가지가 문제다:
-  1) 와이파이로 20MB를 받아야 한다.
-  2) 디코딩하면 2664*6840*4 = 약 73MB가 메모리에 올라간다. 저사양 태블릿
-     (PowerVR GE8320)에서 이건 위험하다 — 이 프로젝트는 이미 크롬이 WebGL
-     컨텍스트를 회수하는 걸 겪었다.
+두 벌을 만든다. 어느 쪽을 받을지는 rider3p.js가 pointer:coarse로 고른다.
 
-알파가 있는 lossy WebP로 바꾸면 20MB → 약 3.7MB가 된다. 해상도는 안 줄인다:
-PC(1080p, DPR 1.5)에서 스프라이트는 약 940px 높이로 그려지는데 원본 칸이 684px라
-이미 확대해서 쓰는 중이다. 더 줄이면 PC에서 흐려진다.
+  PC (기준 화면)  cyclist-spritesheet.webp       lossless, 원본 해상도, 약 10MB
+  태블릿 (저사양) cyclist-spritesheet-half.webp  lossy q90, 절반 해상도, 약 1.4MB
 
-메모리는 **태블릿용 절반 크기**를 따로 만들어 푼다. 터치 기기는 스프라이트를
-약 420px 높이로만 그리므로 절반(342px)이면 충분하고, 디코딩도 73MB → 18MB가 된다.
-어느 쪽을 받을지는 rider3p.js가 pointer:coarse로 고른다.
+**PC는 손실 압축을 쓰지 않는다.** 이 프로젝트의 기준 화면은 PC 모니터고
+(RTX 2060 / 1920x1080), 거기서 10MB 받는 것도 디코딩된 73MB를 들고 있는 것도
+아무 문제가 아니다. lossless WebP는 원본 PNG와 **픽셀이 같으면서** 20MB → 10MB다.
+q90 lossy도 재봤지만 보이는 영역에서 평균 2/255·최대 37의 오차가 남았다 —
+아낄 이유가 없는 손실이다.
+
+해상도도 PC에서는 안 줄인다: 1080p·DPR 1.5에서 스프라이트가 약 940px 높이로
+그려지는데 원본 칸이 684px라 이미 확대해서 쓰는 중이다.
+
+태블릿만 절반으로 줄인다. 거기서는 약 420px 높이로만 그리므로 절반(342px)이면
+충분하고, 디코딩이 73MB → 18MB로 떨어져 저사양 기기가 버틴다.
 """
 import sys
 from pathlib import Path
@@ -27,7 +30,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "static"
 STEM = "cyclist-spritesheet"
-QUALITY = 90        # 알파가 있는 lossy WebP. 82까지 내려도 크게 다르지 않지만 여유를 뒀다
+HALF_QUALITY = 90   # 태블릿용 절반 시트만 손실 압축. 이미 절반으로 줄인 뒤라 차이가 안 보인다
 
 
 def main(argv):
@@ -38,10 +41,16 @@ def main(argv):
         sys.exit(f"원본이 없습니다: {src}")
 
     im = Image.open(src).convert("RGBA")
-    for suffix, img in (("", im), ("-half", im.resize((im.width // 2, im.height // 2), Image.LANCZOS))):
+    half = im.resize((im.width // 2, im.height // 2), Image.LANCZOS)
+    jobs = [
+        ("", im, dict(lossless=True, method=6)),
+        ("-half", half, dict(quality=HALF_QUALITY, method=6)),
+    ]
+    for suffix, img, kw in jobs:
         out = OUT / f"{STEM}{suffix}.webp"
-        img.save(out, "WEBP", quality=QUALITY, method=6)
-        print(f"{out.relative_to(ROOT)}  {img.width}x{img.height}  "
+        img.save(out, "WEBP", **kw)
+        how = "lossless" if kw.get("lossless") else f"q{kw['quality']}"
+        print(f"{out.relative_to(ROOT)}  {img.width}x{img.height}  {how}  "
               f"{out.stat().st_size / 1e6:.2f}MB  (디코딩 {img.width * img.height * 4 / 1e6:.0f}MB)")
 
 
