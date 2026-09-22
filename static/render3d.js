@@ -926,7 +926,9 @@ function placeRiders(fp) {
   for (const r of (S && S.riders) || []) {
     if (r.kind === "ai") riders.push({ d: r.distance_m, lane: r.lane || 0, color: r.color, a: riderAngles[r.id] || 0, shape: r.persona_id });
   }
-  if (!fp) riders.push({ d: pos0, lane: 0, color: ME.jersey, a: disp.angle, shape: "me" });
+  // 스프라이트 시트가 있으면 내 몸은 drawOverlay가 그린다 → 3D 메시는 세우지 않는다.
+  // 둘 다 그리면 라이더가 둘로 보인다.
+  if (!fp && !rider3pActive()) riders.push({ d: pos0, lane: 0, color: ME.jersey, a: disp.angle, shape: "me" });
   for (const r of riders) {
     if (r.d - camZ < 2.0) continue;            // 카메라에 붙으면 화면을 다 덮는다
     const w = worldAt(r.d, r.lane);
@@ -1096,14 +1098,19 @@ function drawOverlay(dt, now, fp, cam, fx) {
   if (track && track.finish) {
     add(track.finish, 0, (p) => drawFinishArch(p.x, p.y, p.m, p.m * RW));
   }
-  if (!fp) {   // 내 몸도 3D. 아이템 이펙트만 겹쳐 그린다
-    add(pos0, 0, (p) => drawRiderFx(p, {
-      flame: !!(fx.turbo || fx.pad || fx.star), rainbow: !!fx.star,
-      bubble: !!fx.shield, dizzy: !!fx.slip,
-    }));
-  }
+  const meFx = {
+    flame: !!(fx.turbo || fx.pad || fx.star), rainbow: !!fx.star,
+    bubble: !!fx.shield, dizzy: !!fx.slip,
+  };
+  // 내 몸이 3D 메시일 때만 이펙트를 월드 위치에 겹친다.
+  // 스프라이트일 때는 스프라이트가 제 크기에 맞춰 직접 그린다.
+  if (!fp && !rider3pActive()) add(pos0, 0, (p) => drawRiderFx(p, meFx));
   list.sort((a, b) => b.p.depth - a.p.depth);
   for (const it of list) it.draw(it.p);
+  if (!fp) {
+    drawRiderSprite(now, { ...meFx, standing: factorAt(pos0) < 0.8 && disp.rpm > 0,
+                           tilt: fx.slip ? Math.sin(now / 60) * 0.25 : 0 });
+  }
   if (fp) {
     drawCockpit(now, { ...ME, standing: factorAt(pos0) < 0.8 && disp.rpm > 0,
                        rainbow: !!fx.star, bubble: !!fx.shield });

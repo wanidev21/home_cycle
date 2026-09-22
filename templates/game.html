@@ -625,6 +625,7 @@ html.fx-on .overlay { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(
 
 <script src="/static/nosleep.min.js"></script>
 <script src="/static/cockpit.js"></script>
+<script src="/static/rider3p.js"></script>
 <script>const MOCK = {{ 'true' if mock else 'false' }};</script>
 {% raw %}
 <script>
@@ -2060,11 +2061,15 @@ function render(dt, now) {
   if (fp) {
     if (roll) ctx.restore();
     drawCockpit(now, { ...ME, standing: climbing, rainbow: !!fx.star, bubble: !!fx.shield });
-  } else drawRider(W / 2, riderY, riderScale, disp.angle, {
-    ...ME, standing: climbing,
-    flame: !!(fx.turbo || fx.pad || fx.star), rainbow: !!fx.star, bubble: !!fx.shield,
-    tilt: fx.slip ? Math.sin(now / 60) * 0.25 : 0, dizzy: !!fx.slip,
-  });
+  } else {
+    const meOpts = {
+      ...ME, standing: climbing,
+      flame: !!(fx.turbo || fx.pad || fx.star), rainbow: !!fx.star, bubble: !!fx.shield,
+      tilt: fx.slip ? Math.sin(now / 60) * 0.25 : 0, dizzy: !!fx.slip,
+    };
+    // 스프라이트 시트가 있으면 그쪽, 없으면 도형으로 그린 라이더. 둘 다 없는 경우는 없다.
+    if (!drawRiderSprite(now, meOpts)) drawRider(W / 2, riderY, riderScale, disp.angle, meOpts);
+  }
   // 내 옆·뒤 라이벌 (카메라와 나 사이) — 1인칭에선 안 보임
   behindMe.sort((a, b) => b.distance_m - a.distance_m);
   if (!fp) for (const r of behindMe) {
